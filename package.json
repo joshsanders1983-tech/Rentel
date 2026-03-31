@@ -1,0 +1,69 @@
+{
+  "name": "rentel-desktop",
+  "version": "1.0.0",
+  "description": "Rentel desktop installer wrapper",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm --prefix rental-backend run dev\" \"wait-on tcp:4000 && electron .\"",
+    "build:backend": "npm --prefix rental-backend run build",
+    "dist:win": "npm run build:backend && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^37.1.0",
+    "electron-builder": "^24.13.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.rentel.desktop",
+    "productName": "Rentel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "rental-backend/dist",
+        "to": "rental-backend/dist"
+      },
+      {
+        "from": "rental-backend/public",
+        "to": "rental-backend/public"
+      },
+      {
+        "from": "rental-backend/prisma",
+        "to": "rental-backend/prisma"
+      },
+      {
+        "from": "rental-backend/node_modules",
+        "to": "rental-backend/node_modules"
+      },
+      {
+        "from": "rental-backend/package.json",
+        "to": "rental-backend/package.json"
+      },
+      {
+        "from": "rental-backend/.env.example",
+        "to": "rental-backend/.env.example"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Rentel-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Rentel"
+    }
+  }
+}

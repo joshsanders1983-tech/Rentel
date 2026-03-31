@@ -50,6 +50,25 @@ What the icon does:
 - starts the server (if not already running)
 - opens the app in your browser at `http://localhost:4000`
 
+## Build a Windows Installer (.exe)
+
+If you want a normal installable desktop program for CSRs/Admins/Techs:
+
+1. Open a terminal in the repo root (`J:\Rentel`).
+2. Install desktop wrapper dependencies:
+   - `npm install`
+3. Build installer:
+   - `npm run dist:win`
+4. Find installer in:
+   - `release\Rentel-Setup-1.0.0.exe`
+
+Install outcome:
+
+- Start Menu shortcut
+- Desktop icon
+- Launches as a desktop app window (no browser needed)
+- Uses local app data storage per computer
+
 ## Default Access
 
 - Admin:
