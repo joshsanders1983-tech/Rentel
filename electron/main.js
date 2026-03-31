@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -6,6 +7,7 @@ const path = require("path");
 
 const BACKEND_PORT = 4000;
 let backendProcess = null;
+let mainWindow = null;
 
 function backendRootDir() {
   if (app.isPackaged) {
@@ -115,6 +117,50 @@ function createMainWindow() {
   });
 
   win.loadURL(`http://localhost:${BACKEND_PORT}/dashboard`);
+  return win;
+}
+
+function setupAutoUpdates(win) {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("error", (err) => {
+    const message = err instanceof Error ? err.message : String(err || "");
+    if (!message) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript(
+        `console.warn(${JSON.stringify(`[Rentel Updater] ${message}`)});`,
+      ).catch(() => {
+        // Ignore log bridge errors.
+      });
+    }
+  });
+
+  autoUpdater.on("update-downloaded", async () => {
+    if (!win || win.isDestroyed()) return;
+    const result = await dialog.showMessageBox(win, {
+      type: "info",
+      buttons: ["Restart Now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Ready",
+      message: "A new Rentel update has been downloaded.",
+      detail: "Restart now to apply the update.",
+    });
+    if (result.response === 0) {
+      setImmediate(() => {
+        autoUpdater.quitAndInstall();
+      });
+    }
+  });
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {
+      // Silent fallback: app continues normally without update check.
+    });
+  }, 4000);
 }
 
 async function bootApp() {
@@ -126,7 +172,8 @@ async function bootApp() {
       throw new Error("Rentel backend did not become ready in time.");
     }
   }
-  createMainWindow();
+  mainWindow = createMainWindow();
+  setupAutoUpdates(mainWindow);
 }
 
 app.on("window-all-closed", () => {

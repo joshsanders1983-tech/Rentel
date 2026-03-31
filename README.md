@@ -69,6 +69,24 @@ Install outcome:
 - Launches as a desktop app window (no browser needed)
 - Uses local app data storage per computer
 
+## Auto-Update (No Manual Reinstall)
+
+Auto-update is now enabled through GitHub Releases for installed desktop users.
+
+How to publish an update:
+
+1. Bump version in root `package.json` (for example `1.0.0` -> `1.0.1`).
+2. Commit and push code to `main`.
+3. Build and publish release artifacts:
+   - `npm run publish:win`
+   - Requires `GH_TOKEN` environment variable with repo release permission.
+
+End-user experience:
+
+- App checks for updates automatically after launch.
+- If an update is found, it downloads in the background.
+- User gets a prompt to restart and apply the update.
+
 ## Default Access
 
 - Admin:

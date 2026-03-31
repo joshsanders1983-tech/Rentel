@@ -45,7 +45,7 @@ app.use("/api/tech-auth", apiTechAuthRouter);
 app.use("/api/admin", apiAdminRouter);
 
 app.use((req, res, next) => {
-  if (req.path === "/techs.html" || req.path === "/maintenance.html") {
+  if (req.path === "/techs.html") {
     if (!isTechAuthenticated(req)) {
       res.redirect("/techs-login");
       return;
