@@ -11,6 +11,8 @@
       .card { width:100%; max-width:420px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; }
       h1 { margin:0; font-size:19px; }
       .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .brand { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+      .brand-logo { height:120px; width:auto; object-fit:contain; mix-blend-mode:screen; }
       label { display:block; font-size:12px; color:var(--muted); margin:12px 0 6px; }
       input { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:#0d1117; color:var(--text); outline:none; }
       .row { margin-top:12px; display:flex; gap:8px; align-items:center; }
@@ -18,12 +20,23 @@
       .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
       .link { margin-top:12px; font-size:12px; }
       .link a { color:var(--text); }
+      @media (max-width: 560px) {
+        body { padding:12px; }
+        .card { padding:14px; }
+        .brand { align-items:flex-start; }
+        .brand-logo { height:78px; }
+      }
     </style>
   </head>
   <body>
     <div class="card">
-      <h1>Tech Login</h1>
-      <div class="sub">Sign in to access the Techs workflow.</div>
+      <div class="brand">
+        <img class="brand-logo" src="/branding/logo" alt="Rentel logo" />
+        <div>
+          <h1>Tech Login</h1>
+          <div class="sub">Sign in to access the Techs workflow.</div>
+        </div>
+      </div>
       <label for="tech-username">Username</label>
       <input id="tech-username" type="text" autocomplete="username" />
       <label for="tech-password">Password</label>

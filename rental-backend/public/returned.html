@@ -11,6 +11,8 @@
       header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
       header h1 { margin:0; font-size:18px; }
       .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .brand { display:flex; align-items:center; gap:12px; }
+      .brand-logo { height:138px; width:auto; object-fit:contain; mix-blend-mode:screen; }
       .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
       .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
       .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
@@ -35,12 +37,31 @@
       .modal header { border-bottom:1px solid var(--border); background:rgba(26,35,50,.95); }
       .modal .modal-body { padding:16px; }
       .modal .modal-actions { display:flex; gap:10px; justify-content:flex-end; padding:14px 16px; border-top:1px solid var(--border); }
+      @media (max-width: 900px) {
+        header { padding:12px 14px; }
+        .brand { align-items:flex-start; }
+        .brand-logo { height:84px; }
+        .top-nav { margin-top:10px; }
+        main { padding:12px; }
+        .card { padding:12px; }
+      }
+      @media (max-width: 560px) {
+        .brand { flex-direction:column; align-items:flex-start; }
+        .brand-logo { height:64px; }
+        .top-nav { gap:6px; }
+        .nav-link { padding:7px 10px; font-size:11px; }
+      }
     </style>
   </head>
   <body>
     <header>
-      <h1>Returned</h1>
-      <div class="sub">Ended On Rent entries. Use Place back on Rent if one was returned by mistake.</div>
+      <div class="brand">
+        <img class="brand-logo" src="/branding/logo" alt="Rentel logo" />
+        <div>
+          <h1>Returned</h1>
+          <div class="sub">Ended On Rent entries. Use Place back on Rent if one was returned by mistake.</div>
+        </div>
+      </div>
       <nav class="top-nav" aria-label="Primary">
         <a class="nav-link" href="/dashboard">Dashboard</a>
         <a class="nav-link" href="/reservations">Reservations</a>

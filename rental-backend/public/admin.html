@@ -11,6 +11,8 @@
       header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
       header h1 { margin:0; font-size:18px; }
       .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .brand { display:flex; align-items:center; gap:12px; }
+      .brand-logo { height:138px; width:auto; object-fit:contain; mix-blend-mode:screen; }
       main { max-width:1100px; margin:0 auto; padding:20px; }
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
       .card h2 { margin:0 0 12px; font-size:15px; }
@@ -46,19 +48,41 @@
       .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
       .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
       .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-      .nav-link.disabled { opacity:.55; pointer-events:none; }
       .nav-link-admin { margin-left:auto; }
       #admin-app { display:none; }
       .hint-note { color:var(--muted); font-size:12px; margin-top:8px; }
       .check-inline { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin-right:10px; }
       .check-inline input { width:auto; margin:0; }
       .inspection-item-options { color:var(--muted); font-size:11px; }
+      .login-card { width:100%; max-width:420px; margin:0 auto; }
+      .login-card h1 { margin:0; font-size:19px; }
+      .login-link { margin-top:12px; font-size:12px; }
+      .login-link a { color:var(--text); }
+      @media (max-width: 900px) {
+        header { padding:12px 14px; }
+        .brand { align-items:flex-start; }
+        .brand-logo { height:84px; }
+        .top-nav { margin-top:10px; }
+        main { padding:12px; }
+        .card { padding:12px; }
+      }
+      @media (max-width: 560px) {
+        .brand { flex-direction:column; align-items:flex-start; }
+        .brand-logo { height:64px; }
+        .top-nav { gap:6px; }
+        .nav-link { padding:7px 10px; font-size:11px; }
+      }
     </style>
   </head>
   <body>
     <header>
-      <h1>Admin</h1>
-      <div class="sub">Inventory editor access is restricted to admins only.</div>
+      <div class="brand">
+        <img class="brand-logo" src="/branding/logo" alt="Rentel logo" />
+        <div>
+          <h1>Admin</h1>
+          <div class="sub">Inventory editor access is restricted to admins only.</div>
+        </div>
+      </div>
       <nav class="top-nav" aria-label="Primary">
         <a class="nav-link" href="/dashboard">Dashboard</a>
         <a class="nav-link" href="/reservations">Reservations</a>
@@ -71,8 +95,9 @@
     </header>
 
     <main>
-      <div id="admin-auth-card" class="card">
-        <h2>Admin Login</h2>
+      <div id="admin-auth-card" class="card login-card">
+        <h1>Admin Login</h1>
+        <div class="sub">Sign in to access the Admin workflow.</div>
         <label for="admin-password">Password</label>
         <input id="admin-password" type="password" autocomplete="current-password" />
         <div class="row" style="margin-top:10px;">
@@ -80,6 +105,7 @@
         </div>
         <div id="admin-default-hint" class="hint-note" style="display:none;">No `ADMIN_PASSWORD` found in `.env`. Default password is `admin`.</div>
         <div id="admin-auth-error" class="msg" style="display:none;"></div>
+        <div class="login-link"><a href="/dashboard">Back to Dashboard</a></div>
       </div>
 
       <div id="admin-app">
@@ -2264,4 +2290,5 @@
     </script>
   </body>
 </html>
+
 

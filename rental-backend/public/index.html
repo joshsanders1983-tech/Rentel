@@ -11,6 +11,8 @@
       header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
       header h1 { margin:0; font-size:18px; }
       .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .brand { display:flex; align-items:center; gap:12px; }
+      .brand-logo { height:138px; width:auto; object-fit:contain; mix-blend-mode:screen; }
       main { max-width:1100px; margin:0 auto; padding:20px; }
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
       .card h2 { margin:0 0 12px; font-size:15px; }
@@ -23,14 +25,32 @@
       .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
       .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
       .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-      .nav-link.disabled { opacity:.55; pointer-events:none; }
       .nav-link-admin { margin-left:auto; }
+      @media (max-width: 900px) {
+        header { padding:12px 14px; }
+        .brand { align-items:flex-start; }
+        .brand-logo { height:84px; }
+        .top-nav { margin-top:10px; }
+        main { padding:12px; }
+        .card { padding:12px; }
+      }
+      @media (max-width: 560px) {
+        .brand { flex-direction:column; align-items:flex-start; }
+        .brand-logo { height:64px; }
+        .top-nav { gap:6px; }
+        .nav-link { padding:7px 10px; font-size:11px; }
+      }
     </style>
   </head>
   <body>
     <header>
-      <h1>Inventory</h1>
-      <div class="sub">View-only inventory to preserve unit data integrity. All edits are in Admin.</div>
+      <div class="brand">
+        <img class="brand-logo" src="/branding/logo" alt="Rentel logo" />
+        <div>
+          <h1>Inventory</h1>
+          <div class="sub">View-only inventory to preserve unit data integrity. All edits are in Admin.</div>
+        </div>
+      </div>
       <nav class="top-nav" aria-label="Primary">
         <a class="nav-link" href="/dashboard">Dashboard</a>
         <a class="nav-link" href="/reservations">Reservations</a>
@@ -143,4 +163,5 @@
     </script>
   </body>
 </html>
+
 

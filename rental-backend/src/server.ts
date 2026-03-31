@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createReadStream, existsSync } from "node:fs";
 import { isDefaultAdminPasswordInUse } from "./lib/adminAuth.js";
 import { evaluateMaintenanceRulesForAllUnits } from "./lib/maintenanceAutomation.js";
 import { isTechAuthenticated } from "./lib/techAuth.js";
@@ -19,6 +20,9 @@ dotenv.config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
+const brandingLogoPath =
+  process.env.BRANDING_LOGO_PATH ||
+  "C:\\Users\\Josh\\.cursor\\projects\\j-Rentel\\assets\\c__Users_Josh_AppData_Roaming_Cursor_User_workspaceStorage_b1d138578e147fd13d7993d6e7d0ce8c_images_ChatGPT_Image_Mar_31__2026__12_49_03_PM-1a92ac9c-c06a-4e6c-9189-d85ef0d2f861.png";
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -33,6 +37,15 @@ app.get("/health", (_req, res) => {
     service: "rental-backend",
     time: new Date().toISOString(),
   });
+});
+
+app.get("/branding/logo", (_req, res) => {
+  if (!existsSync(brandingLogoPath)) {
+    res.status(404).json({ error: "Branding logo not found." });
+    return;
+  }
+  res.type("png");
+  createReadStream(brandingLogoPath).pipe(res);
 });
 
 app.use("/api/assets", apiAssetsRouter);
