@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      main { max-width:1100px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+      .card h2 { margin:0 0 12px; font-size:15px; }
+      .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+      button { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      button.secondary { background:#3a4a5e; }
+      button.danger { background:#b24242; }
+      label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+      input, textarea, select { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:#0d1117; color:var(--text); outline:none; }
+      textarea { min-height:80px; resize:vertical; }
+      .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+      @media (max-width: 720px){ .grid-2{ grid-template-columns:1fr; } }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 12px; border-bottom:1px solid var(--border); }
+      tbody td { padding:10px 12px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; }
+      tbody tr:last-child td { border-bottom:0; }
+      .empty { color:var(--muted); font-size:13px; }
+      .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:18px; z-index:50; }
+      .modal-overlay.open { display:flex; }
+      .modal { width:760px; max-width:100%; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+      .modal header { border-bottom:1px solid var(--border); background:rgba(26,35,50,.95); }
+      .modal .modal-body { padding:16px; }
+      .modal .modal-actions { display:flex; gap:10px; justify-content:flex-end; padding:14px 16px; border-top:1px solid var(--border); }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .label-hint { color:var(--muted); font-size:11px; margin-left:6px; font-weight:400; }
+      .preview { margin-top:14px; background:#0d1117; border:1px solid var(--border); border-radius:10px; padding:12px; }
+      .preview .muted { color:var(--muted); font-size:12px; margin-bottom:6px; }
+      .preview .kv { display:grid; grid-template-columns:120px 1fr; gap:8px 12px; font-size:13px; }
+      .option-list { margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; }
+      .option-chip { background:#0d1117; border:1px solid var(--border); border-radius:999px; padding:5px 10px; font-size:12px; display:flex; gap:8px; align-items:center; }
+      .chip-btn { border:1px solid var(--border); background:#1a2332; color:var(--text); cursor:pointer; font-size:11px; padding:2px 8px; border-radius:999px; }
+      .chip-x { border:0; background:transparent; color:#ff8f8f; cursor:pointer; font-size:12px; padding:0; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link.disabled { opacity:.55; pointer-events:none; }
+      .nav-link-admin { margin-left:auto; }
+      #admin-app { display:none; }
+      .hint-note { color:var(--muted); font-size:12px; margin-top:8px; }
+      .check-inline { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin-right:10px; }
+      .check-inline input { width:auto; margin:0; }
+      .inspection-item-options { color:var(--muted); font-size:11px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Admin</h1>
+      <div class="sub">Inventory editor access is restricted to admins only.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin active" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div id="admin-auth-card" class="card">
+        <h2>Admin Login</h2>
+        <label for="admin-password">Password</label>
+        <input id="admin-password" type="password" autocomplete="current-password" />
+        <div class="row" style="margin-top:10px;">
+          <button id="admin-login" type="button">Unlock Admin</button>
+        </div>
+        <div id="admin-default-hint" class="hint-note" style="display:none;">No `ADMIN_PASSWORD` found in `.env`. Default password is `admin`.</div>
+        <div id="admin-auth-error" class="msg" style="display:none;"></div>
+      </div>
+
+      <div id="admin-app">
+        <div class="card">
+          <h2>Actions</h2>
+          <div class="row">
+            <button id="open-inventory" type="button">Add Inventory</button>
+            <button class="secondary" id="open-asset" type="button">Asset Entry</button>
+            <button class="secondary" id="open-edit-assets" type="button">Edit Assets</button>
+            <button class="danger" id="admin-logout" type="button">Lock Admin</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Inspection Form</h2>
+          <div class="sub">Create multiple forms and assign each unit type to the right form.</div>
+          <div style="margin-top:10px;">
+            <label for="inspection-form-select">Inspection Form</label>
+            <div class="row">
+              <select id="inspection-form-select"></select>
+              <button id="inspection-form-new" type="button">New Form</button>
+              <button class="secondary" id="inspection-form-duplicate" type="button">Duplicate</button>
+              <button class="secondary" id="inspection-form-rename" type="button">Rename</button>
+              <button class="danger" id="inspection-form-delete" type="button">Delete</button>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <label class="check-inline">
+              <input id="inspection-require-hours" type="checkbox" />
+              Require Hour Meter Entry
+            </label>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="inspection-asset-type-select">Assign selected form to Asset Type(s)</label>
+            <div class="row">
+              <select id="inspection-asset-type-select" multiple size="6"></select>
+              <button id="inspection-assign-form" type="button">Assign Selected Asset Types</button>
+            </div>
+            <div class="hint-note" style="margin-top:6px;">Use Ctrl/Cmd + click to select multiple asset types.</div>
+            <div id="inspection-assignment-summary" class="hint-note" style="margin-top:6px;"></div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="new-inspection-item">Add checklist item</label>
+            <div class="row">
+              <input id="new-inspection-item" placeholder="e.g. Tires are inflated and free of damage" />
+              <button id="add-inspection-item" type="button">Add Item</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <label class="check-inline"><input id="new-inspection-opt-ok" type="checkbox" checked />Ok</label>
+              <label class="check-inline"><input id="new-inspection-opt-needs-attention" type="checkbox" checked />Needs attention</label>
+              <label class="check-inline"><input id="new-inspection-opt-damaged" type="checkbox" checked />Damaged</label>
+              <label class="check-inline"><input id="new-inspection-opt-na" type="checkbox" checked />N/A</label>
+            </div>
+          </div>
+          <div id="inspection-item-empty" class="empty" style="display:none; margin-top:10px;">No inspection checklist items configured yet.</div>
+          <div class="option-list" id="inspection-item-list"></div>
+          <div id="inspection-item-error" class="msg" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Tech Entry</h2>
+          <div class="sub">Manage technician accounts used for Techs sign-in.</div>
+          <div class="row" style="margin-top:12px;">
+            <select id="tech-entry-select"></select>
+            <button id="tech-entry-new" class="secondary" type="button">New Tech</button>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="tech-entry-name">Tech Name</label>
+            <input id="tech-entry-name" placeholder="e.g. Alex" autocomplete="off" />
+          </div>
+          <div style="margin-top:12px;">
+            <label for="tech-entry-username">Username</label>
+            <input id="tech-entry-username" autocomplete="off" />
+          </div>
+          <div style="margin-top:12px;">
+            <label for="tech-entry-password">Password</label>
+            <input id="tech-entry-password" type="password" autocomplete="new-password" />
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button id="tech-entry-save" type="button">Save Tech Entry</button>
+          </div>
+          <div id="tech-entry-info" class="hint-note" style="display:none; margin-top:10px;"></div>
+          <div id="tech-entry-error" class="msg" style="display:none;"></div>
+          <div id="tech-entry-success" class="msg" style="display:none; color:#6bd18c;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Service Automation</h2>
+          <div class="sub">Create service rules for hours or rental counts across all units, selected asset types, or specific units.</div>
+          <input id="maintenance-rule-id" type="hidden" />
+          <div class="grid-2" style="margin-top:12px;">
+            <div>
+              <label for="maintenance-rule-name">Rule Name</label>
+              <input id="maintenance-rule-name" placeholder="e.g. 50hr Service Rule" />
+            </div>
+            <div>
+              <label for="maintenance-rule-service-label">Service Label</label>
+              <input id="maintenance-rule-service-label" placeholder="e.g. 50hr Service" />
+            </div>
+            <div>
+              <label for="maintenance-rule-trigger-type">Trigger Type</label>
+              <select id="maintenance-rule-trigger-type">
+                <option value="HOURS">Hours</option>
+                <option value="RENTAL_COUNT">Rental Count</option>
+              </select>
+            </div>
+            <div>
+              <label for="maintenance-rule-interval">Interval</label>
+              <input id="maintenance-rule-interval" type="number" min="1" step="1" value="50" />
+            </div>
+            <div>
+              <label for="maintenance-rule-scope-type">Applies To</label>
+              <select id="maintenance-rule-scope-type">
+                <option value="ALL_UNITS">All Units</option>
+                <option value="ASSET_TYPES">Selected Asset Types</option>
+                <option value="SPECIFIC_UNITS">Specific Units</option>
+              </select>
+            </div>
+            <div>
+              <label for="maintenance-rule-inspection-form-id">Required Inspection Form</label>
+              <select id="maintenance-rule-inspection-form-id"></select>
+            </div>
+          </div>
+          <div id="maintenance-rule-asset-wrap" style="margin-top:12px; display:none;">
+            <label for="maintenance-rule-asset-ids">Asset Types</label>
+            <select id="maintenance-rule-asset-ids" multiple size="6"></select>
+            <div class="hint-note" style="margin-top:6px;">Use Ctrl/Cmd + click to select multiple asset types.</div>
+          </div>
+          <div id="maintenance-rule-unit-wrap" style="margin-top:12px; display:none;">
+            <label for="maintenance-rule-unit-ids">Specific Units</label>
+            <select id="maintenance-rule-unit-ids" multiple size="6"></select>
+            <div class="hint-note" style="margin-top:6px;">Use Ctrl/Cmd + click to select multiple units.</div>
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <label class="check-inline">
+              <input id="maintenance-rule-active" type="checkbox" checked />
+              Active
+            </label>
+            <button id="maintenance-rule-save" type="button">Add Rule</button>
+            <button class="secondary" id="maintenance-rule-reset" type="button">Clear</button>
+            <button class="secondary" id="maintenance-rules-refresh" type="button">Refresh Rules</button>
+            <button class="secondary" id="maintenance-recheck-all" type="button">Recheck All Units</button>
+          </div>
+          <div id="maintenance-rule-error" class="msg" style="display:none;"></div>
+          <div id="maintenance-rules-empty" class="empty" style="display:none; margin-top:10px;">No service rules configured.</div>
+          <table style="margin-top:10px;">
+            <thead>
+              <tr>
+                <th>Rule</th>
+                <th>Trigger</th>
+                <th>Scope</th>
+                <th>Inspection Form</th>
+                <th style="width:110px;">Active</th>
+                <th style="width:210px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="maintenance-rules-body"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Due Services</h2>
+          <div class="sub">Track due service tasks, assign techs, and complete tasks after inspection submission.</div>
+          <div class="row" style="margin-top:10px;">
+            <div style="min-width:180px;">
+              <label for="maintenance-task-filter">Task Filter</label>
+              <select id="maintenance-task-filter">
+                <option value="open">Open Tasks</option>
+                <option value="all">All Tasks</option>
+              </select>
+            </div>
+            <button class="secondary" id="maintenance-tasks-refresh" type="button">Refresh Tasks</button>
+          </div>
+          <div id="maintenance-task-error" class="msg" style="display:none;"></div>
+          <div id="maintenance-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
+          <table style="margin-top:10px;">
+            <thead>
+              <tr>
+                <th style="width:120px;">Unit</th>
+                <th style="width:120px;">Type</th>
+                <th>Rule</th>
+                <th style="width:150px;">Due / Current</th>
+                <th>Inspection Form</th>
+                <th style="width:200px;">Assigned Tech</th>
+                <th style="width:110px;">Status</th>
+                <th style="width:180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="maintenance-tasks-body"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Inventory</h2>
+          <div id="inventory-empty" class="empty" style="display:none;">No units yet. Use Add Inventory.</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:160px;">Unit Number</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th style="width:170px;">Hours</th>
+                <th style="width:160px;">Status</th>
+                <th style="width:190px;">Last Rented</th>
+                <th style="width:120px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <div id="asset-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <header>
+          <h2 style="margin:0;font-size:15px;">Asset Entry</h2>
+          <div class="sub">Fields: Type Code, Description.</div>
+        </header>
+        <div class="modal-body">
+          <div>
+            <label for="asset-type">Type Code <span class="label-hint">example: 6EL</span></label>
+            <input id="asset-type" />
+          </div>
+          <div style="margin-top:12px;"><label for="asset-description">Description</label><textarea id="asset-description"></textarea></div>
+          <div id="asset-error" class="msg" style="display:none;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary" id="asset-cancel" type="button">Cancel</button>
+          <button id="asset-save" type="button">Save Asset</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="inventory-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <header>
+          <h2 style="margin:0;font-size:15px;">Add Inventory</h2>
+          <div class="sub">Select Asset, enter Unit Number, and set Hours.</div>
+        </header>
+        <div class="modal-body">
+          <div class="grid-2">
+            <div>
+              <label for="inv-asset">Asset</label>
+              <select id="inv-asset"></select>
+            </div>
+            <div id="unit-wrap" style="display:none;">
+              <label for="inv-unit-number">Unit Number</label>
+              <input id="inv-unit-number" placeholder="e.g. GC-101" />
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="inv-hours">Hours</label>
+            <input id="inv-hours" type="number" step="0.1" placeholder="e.g. 1234.5" />
+          </div>
+          <div class="preview">
+            <div class="muted">Selected asset preview</div>
+            <div class="kv">
+              <div>Type</div><div id="inv-prev-type">-</div>
+              <div>Description</div><div id="inv-prev-desc">-</div>
+            </div>
+          </div>
+          <div id="inv-error" class="msg" style="display:none;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary" id="inv-cancel" type="button">Cancel</button>
+          <button id="inv-save" type="button">Add Unit</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="edit-assets-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <header>
+          <h2 style="margin:0;font-size:15px;">Edit Assets</h2>
+          <div class="sub">Remove asset types and manage custom status options.</div>
+        </header>
+        <div class="modal-body">
+          <div>
+            <label for="edit-assets-asset">Asset Type</label>
+            <select id="edit-assets-asset"></select>
+            <div class="row" style="margin-top:8px;">
+              <button class="danger" id="remove-asset-type" type="button">Remove Selected Asset Type</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="edit-assets-description">Update description for selected asset type</label>
+            <textarea id="edit-assets-description" placeholder="Enter updated description..."></textarea>
+            <div class="row" style="margin-top:8px;">
+              <button id="save-asset-description" type="button">Save Description</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="new-status-option">Add status option (user-defined)</label>
+            <div class="row">
+              <input id="new-status-option" placeholder="e.g. Available" />
+              <button id="add-status-option" type="button">Add</button>
+            </div>
+          </div>
+          <div class="option-list" id="status-option-list"></div>
+          <div id="edit-assets-error" class="msg" style="display:none;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary" id="edit-assets-cancel" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="edit-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <header>
+          <h2 style="margin:0;font-size:15px;">Edit Unit</h2>
+          <div class="sub">Change type, status, unit number, or delete unit.</div>
+        </header>
+        <div class="modal-body">
+          <input id="edit-id" type="hidden" />
+          <div class="grid-2">
+            <div>
+              <label for="edit-asset">Asset</label>
+              <select id="edit-asset"></select>
+            </div>
+            <div>
+              <label for="edit-unit-number">Unit Number</label>
+              <input id="edit-unit-number" />
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="edit-status">Status</label>
+            <select id="edit-status"></select>
+          </div>
+          <div style="margin-top:12px;">
+            <label for="edit-hours">Hours</label>
+            <input id="edit-hours" type="number" step="0.1" />
+          </div>
+          <div id="edit-error" class="msg" style="display:none;"></div>
+        </div>
+        <div class="modal-actions" style="justify-content:space-between;">
+          <button class="danger" id="edit-delete" type="button">Delete Unit</button>
+          <div class="row">
+            <button class="secondary" id="edit-cancel" type="button">Cancel</button>
+            <button id="edit-save" type="button">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal" style="width:560px;">
+        <header>
+          <h2 id="confirm-modal-title" style="margin:0;font-size:15px;">Confirm</h2>
+        </header>
+        <div class="modal-body">
+          <div id="confirm-modal-text" style="white-space:pre-wrap;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary" id="confirm-modal-cancel" type="button">Cancel</button>
+          <button id="confirm-modal-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="prompt-modal" class="modal-overlay" role="dialog" aria-modal="true">
+      <div class="modal" style="width:560px;">
+        <header>
+          <h2 id="prompt-modal-title" style="margin:0;font-size:15px;">Enter Value</h2>
+        </header>
+        <div class="modal-body">
+          <div id="prompt-modal-text" style="white-space:pre-wrap;"></div>
+          <div style="margin-top:12px;">
+            <label for="prompt-modal-input" id="prompt-modal-label">Value</label>
+            <input id="prompt-modal-input" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary" id="prompt-modal-cancel" type="button">Cancel</button>
+          <button id="prompt-modal-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const adminAuthCard = $("admin-auth-card");
+      const adminApp = $("admin-app");
+      const adminPassword = $("admin-password");
+      const adminAuthErr = $("admin-auth-error");
+      const adminDefaultHint = $("admin-default-hint");
+
+      const assetModal = $("asset-modal"), inventoryModal = $("inventory-modal"), editAssetsModal = $("edit-assets-modal"), editModal = $("edit-modal");
+      const confirmModal = $("confirm-modal"), promptModal = $("prompt-modal");
+      const assetErr = $("asset-error"), invErr = $("inv-error"), editAssetsErr = $("edit-assets-error"), editErr = $("edit-error");
+      const invAssetSelect = $("inv-asset"), editAssetsAssetSelect = $("edit-assets-asset"), editAssetsDescription = $("edit-assets-description"), unitWrap = $("unit-wrap"), invUnitNumber = $("inv-unit-number"), invHours = $("inv-hours");
+      const editStatus = $("edit-status");
+      const invPrevType = $("inv-prev-type"), invPrevDesc = $("inv-prev-desc");
+      const inventoryBody = $("inventory-body"), inventoryEmpty = $("inventory-empty");
+      const editId = $("edit-id"), editAsset = $("edit-asset"), editUnitNumber = $("edit-unit-number"), editHours = $("edit-hours");
+      const statusOptionList = $("status-option-list");
+      const inspectionItemList = $("inspection-item-list");
+      const inspectionItemEmpty = $("inspection-item-empty");
+      const inspectionItemErr = $("inspection-item-error");
+      const inspectionFormSelect = $("inspection-form-select");
+      const inspectionFormNewBtn = $("inspection-form-new");
+      const inspectionFormDuplicateBtn = $("inspection-form-duplicate");
+      const inspectionFormRenameBtn = $("inspection-form-rename");
+      const inspectionFormDeleteBtn = $("inspection-form-delete");
+      const inspectionRequireHours = $("inspection-require-hours");
+      const inspectionAssetTypeSelect = $("inspection-asset-type-select");
+      const inspectionAssignFormBtn = $("inspection-assign-form");
+      const inspectionAssignmentSummary = $("inspection-assignment-summary");
+      const techEntrySelect = $("tech-entry-select");
+      const techEntryNew = $("tech-entry-new");
+      const techEntryName = $("tech-entry-name");
+      const techEntryUsername = $("tech-entry-username");
+      const techEntryPassword = $("tech-entry-password");
+      const techEntrySave = $("tech-entry-save");
+      const techEntryInfo = $("tech-entry-info");
+      const techEntryErr = $("tech-entry-error");
+      const techEntrySuccess = $("tech-entry-success");
+      const maintenanceRuleId = $("maintenance-rule-id");
+      const maintenanceRuleName = $("maintenance-rule-name");
+      const maintenanceRuleServiceLabel = $("maintenance-rule-service-label");
+      const maintenanceRuleTriggerType = $("maintenance-rule-trigger-type");
+      const maintenanceRuleInterval = $("maintenance-rule-interval");
+      const maintenanceRuleScopeType = $("maintenance-rule-scope-type");
+      const maintenanceRuleInspectionFormId = $("maintenance-rule-inspection-form-id");
+      const maintenanceRuleAssetWrap = $("maintenance-rule-asset-wrap");
+      const maintenanceRuleAssetIds = $("maintenance-rule-asset-ids");
+      const maintenanceRuleUnitWrap = $("maintenance-rule-unit-wrap");
+      const maintenanceRuleUnitIds = $("maintenance-rule-unit-ids");
+      const maintenanceRuleActive = $("maintenance-rule-active");
+      const maintenanceRuleSaveBtn = $("maintenance-rule-save");
+      const maintenanceRuleResetBtn = $("maintenance-rule-reset");
+      const maintenanceRulesRefreshBtn = $("maintenance-rules-refresh");
+      const maintenanceRecheckAllBtn = $("maintenance-recheck-all");
+      const maintenanceRuleErr = $("maintenance-rule-error");
+      const maintenanceRulesEmpty = $("maintenance-rules-empty");
+      const maintenanceRulesBody = $("maintenance-rules-body");
+      const maintenanceTaskFilter = $("maintenance-task-filter");
+      const maintenanceTasksRefreshBtn = $("maintenance-tasks-refresh");
+      const maintenanceTaskErr = $("maintenance-task-error");
+      const maintenanceTasksEmpty = $("maintenance-tasks-empty");
+      const maintenanceTasksBody = $("maintenance-tasks-body");
+
+      let assets = [];
+      let inventoryRows = [];
+      let statusOptions = [];
+      let inspectionForms = [];
+      let selectedInspectionFormId = "";
+      let inspectionAssetMappings = [];
+      let inspectionFormItems = [];
+      let technicians = [];
+      let selectedTechnicianId = "";
+      let maintenanceRules = [];
+      let maintenanceTasks = [];
+      let lastRentedByUnit = {};
+      let editOriginalStatus = "";
+      let confirmResolver = null;
+      let promptResolver = null;
+      const INSPECTION_OPTION_DEFS = [
+        { key: "ok", label: "Ok" },
+        { key: "needsAttention", label: "Needs attention" },
+        { key: "damaged", label: "Damaged" },
+        { key: "na", label: "N/A" },
+      ];
+
+      function setMsg(el, msg) {
+        el.style.display = msg ? "block" : "none";
+        el.textContent = msg || "";
+      }
+
+      function hasAnyInspectionOption(options) {
+        return options.ok || options.needsAttention || options.damaged || options.na;
+      }
+
+      function inspectionOptionsFromItem(item) {
+        const source = item && typeof item.options === "object" ? item.options : item;
+        const readOption = (newKey, legacyKey) => {
+          if (source && source[newKey] === true) return true;
+          if (source && source[newKey] === false) return false;
+          if (item && item[legacyKey] === true) return true;
+          if (item && item[legacyKey] === false) return false;
+          return true;
+        };
+        return {
+          ok: readOption("ok", "allowOk"),
+          needsAttention: readOption("needsAttention", "allowNeedsAttention"),
+          damaged: readOption("damaged", "allowDamaged"),
+          na: readOption("na", "allowNa"),
+        };
+      }
+
+      function getNewInspectionOptions() {
+        return {
+          ok: $("new-inspection-opt-ok").checked,
+          needsAttention: $("new-inspection-opt-needs-attention").checked,
+          damaged: $("new-inspection-opt-damaged").checked,
+          na: $("new-inspection-opt-na").checked,
+        };
+      }
+
+      function formatInspectionOptions(options) {
+        return INSPECTION_OPTION_DEFS
+          .filter((opt) => options[opt.key])
+          .map((opt) => opt.label)
+          .join(", ");
+      }
+
+      function selectedInspectionForm() {
+        return inspectionForms.find((form) => form.id === selectedInspectionFormId) || null;
+      }
+
+      function ensureSelectedInspectionFormId() {
+        if (inspectionForms.some((form) => form.id === selectedInspectionFormId)) {
+          return;
+        }
+        const firstActive = inspectionForms.find((form) => form.active !== false);
+        selectedInspectionFormId = firstActive
+          ? firstActive.id
+          : (inspectionForms[0] && inspectionForms[0].id) || "";
+      }
+
+      function renderInspectionFormSelect() {
+        inspectionFormSelect.innerHTML = "";
+        if (!inspectionForms || inspectionForms.length === 0) {
+          const emptyOpt = document.createElement("option");
+          emptyOpt.value = "";
+          emptyOpt.textContent = "No forms configured";
+          inspectionFormSelect.appendChild(emptyOpt);
+          inspectionFormSelect.value = "";
+          inspectionFormDuplicateBtn.disabled = true;
+          inspectionFormRenameBtn.disabled = true;
+          inspectionFormDeleteBtn.disabled = true;
+          inspectionRequireHours.disabled = true;
+          inspectionRequireHours.checked = false;
+          return;
+        }
+
+        for (const form of inspectionForms) {
+          const opt = document.createElement("option");
+          opt.value = form.id;
+          opt.textContent = form.active !== false ? form.name : `${form.name} (Inactive)`;
+          inspectionFormSelect.appendChild(opt);
+        }
+        ensureSelectedInspectionFormId();
+        inspectionFormSelect.value = selectedInspectionFormId;
+
+        const selectedForm = selectedInspectionForm();
+        const disableActions = !selectedForm;
+        inspectionFormDuplicateBtn.disabled = disableActions;
+        inspectionFormRenameBtn.disabled = disableActions;
+        inspectionFormDeleteBtn.disabled = disableActions;
+        inspectionRequireHours.disabled = disableActions;
+        inspectionRequireHours.checked = selectedForm
+          ? selectedForm.requireHourMeterEntry === true
+          : false;
+      }
+
+      function selectedInspectionAssetIds() {
+        return Array.from(inspectionAssetTypeSelect.selectedOptions || [])
+          .map((opt) => opt.value)
+          .filter((value) => Boolean(value));
+      }
+
+      function renderInspectionAssetTypeSelect(preferredAssetIds = []) {
+        inspectionAssetTypeSelect.innerHTML = "";
+        if (!assets.length) {
+          const emptyOpt = document.createElement("option");
+          emptyOpt.value = "";
+          emptyOpt.textContent = "No asset types yet";
+          inspectionAssetTypeSelect.appendChild(emptyOpt);
+          return;
+        }
+
+        const selectedForm = selectedInspectionForm();
+        const assignedAssetIds = new Set(
+          inspectionAssetMappings
+            .filter((mapping) => mapping.inspectionFormId === selectedForm?.id)
+            .map((mapping) => mapping.assetId),
+        );
+        const preferredSet = new Set(preferredAssetIds);
+        for (const a of assets) {
+          const opt = document.createElement("option");
+          opt.value = a.id;
+          opt.textContent = a.description ? `${a.type} - ${a.description}` : a.type;
+          if (preferredSet.size > 0) {
+            opt.selected = preferredSet.has(a.id);
+          } else {
+            opt.selected = assignedAssetIds.has(a.id);
+          }
+          inspectionAssetTypeSelect.appendChild(opt);
+        }
+      }
+
+      function renderInspectionAssignmentSummary() {
+        const selectedForm = selectedInspectionForm();
+        if (!selectedForm) {
+          inspectionAssignmentSummary.textContent = "";
+          inspectionAssignFormBtn.disabled = true;
+          return;
+        }
+
+        inspectionAssignFormBtn.disabled = selectedForm.active === false;
+        const assigned = inspectionAssetMappings.filter(
+          (mapping) => mapping.inspectionFormId === selectedForm.id,
+        );
+        if (assigned.length === 0) {
+          inspectionAssignmentSummary.textContent = "No asset types currently assigned to this form.";
+          return;
+        }
+
+        const assetLabels = assigned.map((mapping) => {
+          if (mapping.description) return `${mapping.type} - ${mapping.description}`;
+          return String(mapping.type || "");
+        });
+        assetLabels.sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }),
+        );
+        inspectionAssignmentSummary.textContent =
+          `Assigned asset types (${assetLabels.length}): ${assetLabels.join(", ")}`;
+      }
+
+      function titleCaseWords(value) {
+        return String(value ?? "")
+          .trim()
+          .toLowerCase()
+          .split(/[\s_]+/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ");
+      }
+
+      function readMultiSelectValues(select) {
+        return Array.from(select.selectedOptions || [])
+          .map((opt) => String(opt.value || "").trim())
+          .filter((value) => Boolean(value));
+      }
+
+      function setMultiSelectValues(select, values) {
+        const selected = new Set((values || []).map((value) => String(value || "").trim()));
+        Array.from(select.options || []).forEach((opt) => {
+          opt.selected = selected.has(opt.value);
+        });
+      }
+
+      function updateMaintenanceScopeVisibility() {
+        const scopeType = maintenanceRuleScopeType.value || "ALL_UNITS";
+        maintenanceRuleAssetWrap.style.display = scopeType === "ASSET_TYPES" ? "block" : "none";
+        maintenanceRuleUnitWrap.style.display = scopeType === "SPECIFIC_UNITS" ? "block" : "none";
+      }
+
+      function renderMaintenanceRuleInspectionFormSelect(preferredFormId = null) {
+        const nextValue =
+          preferredFormId !== null
+            ? String(preferredFormId || "")
+            : String(maintenanceRuleInspectionFormId.value || "");
+        maintenanceRuleInspectionFormId.innerHTML = "";
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "No specific form (any inspection)";
+        maintenanceRuleInspectionFormId.appendChild(noneOpt);
+        for (const form of inspectionForms) {
+          if (form.active === false) continue;
+          const opt = document.createElement("option");
+          opt.value = form.id;
+          opt.textContent = form.name;
+          maintenanceRuleInspectionFormId.appendChild(opt);
+        }
+        const hasValue = Array.from(maintenanceRuleInspectionFormId.options).some(
+          (opt) => opt.value === nextValue,
+        );
+        maintenanceRuleInspectionFormId.value = hasValue ? nextValue : "";
+      }
+
+      function renderMaintenanceRuleAssetSelect(preferredAssetIds = null) {
+        const nextIds =
+          preferredAssetIds === null
+            ? readMultiSelectValues(maintenanceRuleAssetIds)
+            : preferredAssetIds;
+        maintenanceRuleAssetIds.innerHTML = "";
+        const sortedAssets = [...assets].sort((a, b) =>
+          String(a.type || "").localeCompare(String(b.type || ""), undefined, {
+            sensitivity: "base",
+            numeric: true,
+          }),
+        );
+        for (const asset of sortedAssets) {
+          const opt = document.createElement("option");
+          opt.value = asset.id;
+          opt.textContent = asset.description ? `${asset.type} - ${asset.description}` : asset.type;
+          maintenanceRuleAssetIds.appendChild(opt);
+        }
+        setMultiSelectValues(maintenanceRuleAssetIds, nextIds);
+      }
+
+      function renderMaintenanceRuleUnitSelect(preferredUnitIds = null) {
+        const nextIds =
+          preferredUnitIds === null
+            ? readMultiSelectValues(maintenanceRuleUnitIds)
+            : preferredUnitIds;
+        maintenanceRuleUnitIds.innerHTML = "";
+        const sortedUnits = [...inventoryRows].sort((a, b) =>
+          String(a.unitNumber || "").localeCompare(String(b.unitNumber || ""), undefined, {
+            sensitivity: "base",
+            numeric: true,
+          }),
+        );
+        for (const unit of sortedUnits) {
+          const opt = document.createElement("option");
+          opt.value = unit.id;
+          const assetType = unit.asset && unit.asset.type ? unit.asset.type : "";
+          opt.textContent = assetType ? `${unit.unitNumber} (${assetType})` : unit.unitNumber;
+          maintenanceRuleUnitIds.appendChild(opt);
+        }
+        setMultiSelectValues(maintenanceRuleUnitIds, nextIds);
+      }
+
+      function resetMaintenanceRuleForm() {
+        maintenanceRuleId.value = "";
+        maintenanceRuleName.value = "";
+        maintenanceRuleServiceLabel.value = "";
+        maintenanceRuleTriggerType.value = "HOURS";
+        maintenanceRuleInterval.value = "50";
+        maintenanceRuleScopeType.value = "ALL_UNITS";
+        maintenanceRuleActive.checked = true;
+        renderMaintenanceRuleInspectionFormSelect("");
+        setMultiSelectValues(maintenanceRuleAssetIds, []);
+        setMultiSelectValues(maintenanceRuleUnitIds, []);
+        maintenanceRuleSaveBtn.textContent = "Add Rule";
+        maintenanceRuleResetBtn.textContent = "Clear";
+        updateMaintenanceScopeVisibility();
+      }
+
+      function applyMaintenanceRuleToForm(rule) {
+        maintenanceRuleId.value = rule.id || "";
+        maintenanceRuleName.value = rule.name || "";
+        maintenanceRuleServiceLabel.value = rule.serviceLabel || "";
+        maintenanceRuleTriggerType.value =
+          rule.triggerType === "RENTAL_COUNT" ? "RENTAL_COUNT" : "HOURS";
+        maintenanceRuleInterval.value = String(
+          Number.isFinite(Number(rule.intervalValue)) ? Number(rule.intervalValue) : 1,
+        );
+        maintenanceRuleScopeType.value = rule.scopeType || "ALL_UNITS";
+        maintenanceRuleActive.checked = rule.active !== false;
+        renderMaintenanceRuleInspectionFormSelect(rule.inspectionFormId || "");
+        setMultiSelectValues(maintenanceRuleAssetIds, rule.assetIds || []);
+        setMultiSelectValues(maintenanceRuleUnitIds, rule.unitIds || []);
+        maintenanceRuleSaveBtn.textContent = "Save Rule";
+        maintenanceRuleResetBtn.textContent = "Cancel Edit";
+        updateMaintenanceScopeVisibility();
+      }
+
+      function describeMaintenanceRuleScope(rule) {
+        if (rule.scopeType === "ALL_UNITS") {
+          return "All units";
+        }
+        if (rule.scopeType === "ASSET_TYPES") {
+          const assetLabelById = new Map(
+            assets.map((asset) => [
+              asset.id,
+              asset.description ? `${asset.type} - ${asset.description}` : asset.type,
+            ]),
+          );
+          const labels = (rule.assetIds || [])
+            .map((id) => assetLabelById.get(id) || id)
+            .filter((text) => Boolean(text));
+          return labels.length > 0 ? labels.join(", ") : "Selected asset types";
+        }
+        const unitLabelById = new Map(
+          inventoryRows.map((unit) => [
+            unit.id,
+            unit.asset?.type ? `${unit.unitNumber} (${unit.asset.type})` : unit.unitNumber,
+          ]),
+        );
+        const labels = (rule.unitIds || [])
+          .map((id) => unitLabelById.get(id) || id)
+          .filter((text) => Boolean(text));
+        return labels.length > 0 ? labels.join(", ") : "Specific units";
+      }
+
+      function renderMaintenanceRules() {
+        maintenanceRulesBody.innerHTML = "";
+        if (!maintenanceRules || maintenanceRules.length === 0) {
+          maintenanceRulesEmpty.style.display = "block";
+          return;
+        }
+        maintenanceRulesEmpty.style.display = "none";
+        for (const rule of maintenanceRules) {
+          const tr = document.createElement("tr");
+
+          const ruleCell = document.createElement("td");
+          ruleCell.textContent = `${rule.name || "-"} (${rule.serviceLabel || "-"})`;
+          tr.appendChild(ruleCell);
+
+          const triggerCell = document.createElement("td");
+          const triggerText =
+            rule.triggerType === "RENTAL_COUNT"
+              ? `Every ${rule.intervalValue} Rental(s)`
+              : `Every ${rule.intervalValue} Hour(s)`;
+          triggerCell.textContent = triggerText;
+          tr.appendChild(triggerCell);
+
+          const scopeCell = document.createElement("td");
+          scopeCell.textContent = describeMaintenanceRuleScope(rule);
+          tr.appendChild(scopeCell);
+
+          const inspectionCell = document.createElement("td");
+          inspectionCell.textContent = rule.inspectionFormName || "Any inspection form";
+          tr.appendChild(inspectionCell);
+
+          const activeCell = document.createElement("td");
+          activeCell.textContent = rule.active ? "Yes" : "No";
+          tr.appendChild(activeCell);
+
+          const actionsCell = document.createElement("td");
+          const editBtn = document.createElement("button");
+          editBtn.type = "button";
+          editBtn.className = "secondary";
+          editBtn.textContent = "Edit";
+          editBtn.addEventListener("click", () => {
+            setMsg(maintenanceRuleErr, "");
+            applyMaintenanceRuleToForm(rule);
+          });
+
+          const toggleBtn = document.createElement("button");
+          toggleBtn.type = "button";
+          toggleBtn.className = "secondary";
+          toggleBtn.style.marginLeft = "8px";
+          toggleBtn.textContent = rule.active ? "Pause" : "Activate";
+          toggleBtn.addEventListener("click", async () => {
+            setMsg(maintenanceRuleErr, "");
+            try {
+              await api(`/api/maintenance-automation/rules/${rule.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ active: !rule.active }),
+              });
+              await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+            } catch (e) {
+              setMsg(maintenanceRuleErr, String(e.message || e));
+            }
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "danger";
+          deleteBtn.style.marginLeft = "8px";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            setMsg(maintenanceRuleErr, "");
+            const confirmed = await openConfirmDialog({
+              title: "Delete Service Rule",
+              text: `Delete service rule \"${rule.name}\"?`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+            });
+            if (!confirmed) return;
+            try {
+              await api(`/api/maintenance-automation/rules/${rule.id}`, {
+                method: "DELETE",
+              });
+              if (maintenanceRuleId.value === rule.id) {
+                resetMaintenanceRuleForm();
+              }
+              await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+            } catch (e) {
+              setMsg(maintenanceRuleErr, String(e.message || e));
+            }
+          });
+
+          actionsCell.appendChild(editBtn);
+          actionsCell.appendChild(toggleBtn);
+          actionsCell.appendChild(deleteBtn);
+          tr.appendChild(actionsCell);
+
+          maintenanceRulesBody.appendChild(tr);
+        }
+      }
+
+      function renderMaintenanceTasks() {
+        maintenanceTasksBody.innerHTML = "";
+        if (!maintenanceTasks || maintenanceTasks.length === 0) {
+          maintenanceTasksEmpty.style.display = "block";
+          return;
+        }
+        maintenanceTasksEmpty.style.display = "none";
+
+        for (const task of maintenanceTasks) {
+          const tr = document.createElement("tr");
+
+          const unitCell = document.createElement("td");
+          unitCell.textContent = task.unitNumber || "-";
+          tr.appendChild(unitCell);
+
+          const typeCell = document.createElement("td");
+          typeCell.textContent = task.assetType || "-";
+          tr.appendChild(typeCell);
+
+          const ruleCell = document.createElement("td");
+          ruleCell.textContent = task.ruleName || task.reason || "-";
+          tr.appendChild(ruleCell);
+
+          const dueCurrentCell = document.createElement("td");
+          const metricSuffix = task.triggerType === "RENTAL_COUNT" ? "rentals" : "hrs";
+          dueCurrentCell.textContent = `${task.dueValue} ${metricSuffix} / ${task.currentValue} ${metricSuffix}`;
+          tr.appendChild(dueCurrentCell);
+
+          const formCell = document.createElement("td");
+          formCell.textContent = task.inspectionFormName || "Any inspection form";
+          tr.appendChild(formCell);
+
+          const techCell = document.createElement("td");
+          const techSelect = document.createElement("select");
+          const noneOpt = document.createElement("option");
+          noneOpt.value = "";
+          noneOpt.textContent = "Unassigned";
+          techSelect.appendChild(noneOpt);
+          const knownTechNames = new Set();
+          for (const technician of technicians) {
+            const configuredName =
+              String(technician.techName || "").trim() ||
+              String(technician.username || "").trim();
+            if (configuredName) {
+              knownTechNames.add(configuredName);
+            }
+          }
+          for (const taskRow of maintenanceTasks) {
+            const assignedName = String(taskRow.assignedTechName || "").trim();
+            if (assignedName) {
+              knownTechNames.add(assignedName);
+            }
+          }
+          for (const techName of knownTechNames) {
+            const opt = document.createElement("option");
+            opt.value = techName;
+            opt.textContent = techName;
+            techSelect.appendChild(opt);
+          }
+          techSelect.value = task.assignedTechName || "";
+          const saveTechBtn = document.createElement("button");
+          saveTechBtn.type = "button";
+          saveTechBtn.className = "secondary";
+          saveTechBtn.style.marginTop = "8px";
+          saveTechBtn.textContent = "Save";
+          saveTechBtn.addEventListener("click", async () => {
+            setMsg(maintenanceTaskErr, "");
+            try {
+              await api(`/api/maintenance-automation/tasks/${task.id}/assign-tech`, {
+                method: "PATCH",
+                body: JSON.stringify({ assignedTechName: techSelect.value || null }),
+              });
+              await loadMaintenanceTasks();
+            } catch (e) {
+              setMsg(maintenanceTaskErr, String(e.message || e));
+            }
+          });
+          techCell.appendChild(techSelect);
+          techCell.appendChild(saveTechBtn);
+          tr.appendChild(techCell);
+
+          const statusCell = document.createElement("td");
+          statusCell.textContent = titleCaseWords(task.status || "");
+          tr.appendChild(statusCell);
+
+          const actionsCell = document.createElement("td");
+          const completeBtn = document.createElement("button");
+          completeBtn.type = "button";
+          completeBtn.textContent = "Complete";
+          completeBtn.disabled = String(task.status || "").toUpperCase() === "COMPLETED";
+          completeBtn.addEventListener("click", async () => {
+            setMsg(maintenanceTaskErr, "");
+            try {
+              await api(`/api/maintenance-automation/tasks/${task.id}/complete`, {
+                method: "POST",
+              });
+              await Promise.all([loadMaintenanceTasks(), loadInventory()]);
+            } catch (e) {
+              setMsg(maintenanceTaskErr, String(e.message || e));
+            }
+          });
+          actionsCell.appendChild(completeBtn);
+          tr.appendChild(actionsCell);
+
+          maintenanceTasksBody.appendChild(tr);
+        }
+      }
+
+      function maintenanceRulePayloadFromForm() {
+        const name = maintenanceRuleName.value.trim();
+        const serviceLabel = maintenanceRuleServiceLabel.value.trim();
+        const triggerType = maintenanceRuleTriggerType.value || "HOURS";
+        const scopeType = maintenanceRuleScopeType.value || "ALL_UNITS";
+        const intervalValue = Number(maintenanceRuleInterval.value);
+        const inspectionFormId = maintenanceRuleInspectionFormId.value || null;
+        const assetIds = readMultiSelectValues(maintenanceRuleAssetIds);
+        const unitIds = readMultiSelectValues(maintenanceRuleUnitIds);
+
+        if (!name) return { ok: false, error: "Rule name is required." };
+        if (!serviceLabel) return { ok: false, error: "Service label is required." };
+        if (!Number.isFinite(intervalValue) || Math.floor(intervalValue) < 1) {
+          return { ok: false, error: "Interval must be a whole number of at least 1." };
+        }
+        if (scopeType === "ASSET_TYPES" && assetIds.length === 0) {
+          return { ok: false, error: "Select one or more asset types for this rule scope." };
+        }
+        if (scopeType === "SPECIFIC_UNITS" && unitIds.length === 0) {
+          return { ok: false, error: "Select one or more units for this rule scope." };
+        }
+
+        return {
+          ok: true,
+          payload: {
+            name,
+            serviceLabel,
+            triggerType,
+            intervalValue: Math.floor(intervalValue),
+            scopeType,
+            inspectionFormId,
+            active: maintenanceRuleActive.checked === true,
+            assetIds,
+            unitIds,
+          },
+        };
+      }
+
+      async function loadMaintenanceRules() {
+        maintenanceRules = await api("/api/maintenance-automation/rules");
+        renderMaintenanceRules();
+      }
+
+      async function loadMaintenanceTasks() {
+        const status = maintenanceTaskFilter.value || "open";
+        maintenanceTasks = await api(
+          `/api/maintenance-automation/tasks?status=${encodeURIComponent(status)}`,
+        );
+        renderMaintenanceTasks();
+      }
+
+      function openModal(m) { m.classList.add("open"); }
+      function closeModal(m) { m.classList.remove("open"); }
+
+      [assetModal, inventoryModal, editAssetsModal, editModal].forEach((m) => {
+        m.addEventListener("click", (e) => {
+          if (e.target === m) closeModal(m);
+        });
+      });
+
+      function openConfirmDialog(options) {
+        const title = options && options.title ? options.title : "Confirm";
+        const text = options && options.text ? options.text : "";
+        const confirmLabel = options && options.confirmLabel ? options.confirmLabel : "Confirm";
+        const cancelLabel = options && options.cancelLabel ? options.cancelLabel : "Cancel";
+        $("confirm-modal-title").textContent = title;
+        $("confirm-modal-text").textContent = text;
+        $("confirm-modal-confirm").textContent = confirmLabel;
+        $("confirm-modal-cancel").textContent = cancelLabel;
+        openModal(confirmModal);
+        return new Promise((resolve) => {
+          confirmResolver = resolve;
+        });
+      }
+
+      function closeConfirmDialog(result) {
+        if (typeof confirmResolver === "function") {
+          confirmResolver(Boolean(result));
+        }
+        confirmResolver = null;
+        closeModal(confirmModal);
+      }
+
+      function openPromptDialog(options) {
+        const title = options && options.title ? options.title : "Enter Value";
+        const text = options && options.text ? options.text : "";
+        const label = options && options.label ? options.label : "Value";
+        const initialValue = options && typeof options.initialValue === "string" ? options.initialValue : "";
+        const confirmLabel = options && options.confirmLabel ? options.confirmLabel : "Confirm";
+        const cancelLabel = options && options.cancelLabel ? options.cancelLabel : "Cancel";
+        $("prompt-modal-title").textContent = title;
+        $("prompt-modal-text").textContent = text;
+        $("prompt-modal-label").textContent = label;
+        $("prompt-modal-input").value = initialValue;
+        $("prompt-modal-confirm").textContent = confirmLabel;
+        $("prompt-modal-cancel").textContent = cancelLabel;
+        openModal(promptModal);
+        $("prompt-modal-input").focus();
+        return new Promise((resolve) => {
+          promptResolver = resolve;
+        });
+      }
+
+      function closePromptDialog(result) {
+        if (typeof promptResolver === "function") {
+          promptResolver(result);
+        }
+        promptResolver = null;
+        closeModal(promptModal);
+      }
+
+      confirmModal.addEventListener("click", (e) => {
+        if (e.target === confirmModal) closeConfirmDialog(false);
+      });
+      promptModal.addEventListener("click", (e) => {
+        if (e.target === promptModal) closePromptDialog(null);
+      });
+      $("confirm-modal-cancel").addEventListener("click", () => closeConfirmDialog(false));
+      $("confirm-modal-confirm").addEventListener("click", () => closeConfirmDialog(true));
+      $("prompt-modal-cancel").addEventListener("click", () => closePromptDialog(null));
+      $("prompt-modal-confirm").addEventListener("click", () => closePromptDialog($("prompt-modal-input").value));
+      $("prompt-modal-input").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          closePromptDialog($("prompt-modal-input").value);
+        }
+      });
+
+      function showAuthCard() {
+        adminAuthCard.style.display = "block";
+        adminApp.style.display = "none";
+      }
+
+      function showAdminApp() {
+        adminAuthCard.style.display = "none";
+        adminApp.style.display = "block";
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+        let data = null;
+        if (text) {
+          const looksLikeJson = contentType.includes("application/json");
+          if (looksLikeJson) {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              throw new Error(`Invalid JSON response from ${path}.`);
+            }
+          } else {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = null;
+            }
+          }
+        }
+        if (!res.ok) {
+          if (data && data.error) {
+            throw new Error(String(data.error));
+          }
+          if (text && text.trim().startsWith("<")) {
+            throw new Error(
+              `Unexpected HTML response from ${path}. Restart the backend so the latest API routes are active.`,
+            );
+          }
+          throw new Error(`Request failed (${res.status})`);
+        }
+        if (!contentType.includes("application/json") && text && text.trim().startsWith("<")) {
+          throw new Error(
+            `Unexpected HTML response from ${path}. Restart the backend so the latest API routes are active.`,
+          );
+        }
+        return data;
+      }
+
+      function fillAssetSelect(select, placeholderText) {
+        select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = placeholderText;
+        select.appendChild(ph);
+        for (const a of assets) {
+          const opt = document.createElement("option");
+          opt.value = a.id;
+          opt.textContent = a.description ? `${a.type} - ${a.description}` : a.type;
+          select.appendChild(opt);
+        }
+      }
+
+      function fillStatusSelect(select, placeholderText) {
+        select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = placeholderText;
+        select.appendChild(ph);
+        for (const s of statusOptions) {
+          const opt = document.createElement("option");
+          opt.value = s.value;
+          opt.textContent = s.value;
+          select.appendChild(opt);
+        }
+      }
+
+      function ensureSelectOption(select, value) {
+        const normalizedValue = String(value ?? "").trim();
+        if (!normalizedValue) return;
+        const exists = Array.from(select.options).some((opt) => opt.value === normalizedValue);
+        if (exists) return;
+        const opt = document.createElement("option");
+        opt.value = normalizedValue;
+        opt.textContent = normalizedValue;
+        select.appendChild(opt);
+      }
+
+      function formatLastRented(unitId) {
+        const value = lastRentedByUnit[unitId];
+        if (!value) return "Never";
+        const dt = new Date(value);
+        if (Number.isNaN(dt.getTime())) return "Never";
+        return dt.toLocaleString();
+      }
+
+      function formatHours(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) return "";
+        return Number.isInteger(value) ? String(value) : value.toFixed(1);
+      }
+
+      function parseHoursInput(rawValue) {
+        const text = String(rawValue ?? "").trim();
+        if (!text) return { ok: true, value: null };
+        const parsed = Number(text);
+        if (!Number.isFinite(parsed)) {
+          return { ok: false, error: "Hours must be a valid number." };
+        }
+        return { ok: true, value: parsed };
+      }
+
+      function renderStatusOptionList() {
+        statusOptionList.innerHTML = "";
+        for (const s of statusOptions) {
+          const chip = document.createElement("div");
+          chip.className = "option-chip";
+          chip.innerHTML = `<span>${s.value}</span><button class="chip-x" type="button">x</button>`;
+          chip.querySelector(".chip-x").addEventListener("click", async () => {
+            try {
+              await api(`/api/inventory-status-options/${s.id}`, { method: "DELETE" });
+              await loadStatusOptions();
+            } catch (e) {
+              setMsg(editAssetsErr, String(e.message || e));
+            }
+          });
+          statusOptionList.appendChild(chip);
+        }
+      }
+
+      function normalizeTechEntryName(technician) {
+        return (
+          String(technician?.techName || "").trim() ||
+          String(technician?.username || "").trim() ||
+          "-"
+        );
+      }
+
+      function selectedTechnician() {
+        return technicians.find((tech) => tech.id === selectedTechnicianId) || null;
+      }
+
+      function renderTechEntryPanel() {
+        techEntrySelect.innerHTML = "";
+        const createOpt = document.createElement("option");
+        createOpt.value = "";
+        createOpt.textContent = "Create New Technician";
+        techEntrySelect.appendChild(createOpt);
+
+        for (const technician of technicians) {
+          const opt = document.createElement("option");
+          opt.value = technician.id;
+          opt.textContent = `${normalizeTechEntryName(technician)} (${technician.username || "-"})`;
+          techEntrySelect.appendChild(opt);
+        }
+
+        if (!technicians.some((tech) => tech.id === selectedTechnicianId)) {
+          selectedTechnicianId = "";
+        }
+        techEntrySelect.value = selectedTechnicianId;
+
+        const activeTech = selectedTechnician();
+        if (activeTech) {
+          techEntryName.value = activeTech.techName || "";
+          techEntryUsername.value = activeTech.username || "";
+          techEntryPassword.value = activeTech.password || "";
+          techEntrySave.textContent = "Update Tech Entry";
+        } else {
+          techEntryName.value = "";
+          techEntryUsername.value = "";
+          techEntryPassword.value = "";
+          techEntrySave.textContent = "Add Tech Entry";
+        }
+
+        techEntryInfo.style.display = "block";
+        techEntryInfo.textContent = `${technicians.length} technician account(s) configured.`;
+      }
+
+      function renderInspectionItemList() {
+        inspectionItemList.innerHTML = "";
+        if (!selectedInspectionFormId) {
+          inspectionItemEmpty.style.display = "block";
+          inspectionItemEmpty.textContent = "Select or create an inspection form first.";
+          return;
+        }
+        const activeItems = inspectionFormItems.filter((item) => item.active !== false);
+        if (activeItems.length === 0) {
+          inspectionItemEmpty.style.display = "block";
+          inspectionItemEmpty.textContent = "No inspection checklist items configured yet.";
+          return;
+        }
+
+        inspectionItemEmpty.style.display = "none";
+        for (const item of activeItems) {
+          const chip = document.createElement("div");
+          chip.className = "option-chip";
+          const currentOptions = inspectionOptionsFromItem(item);
+
+          const labelWrap = document.createElement("div");
+          const label = document.createElement("div");
+          label.textContent = item.label;
+          const optionsText = document.createElement("div");
+          optionsText.className = "inspection-item-options";
+          optionsText.textContent = `Options: ${formatInspectionOptions(currentOptions) || "None"}`;
+          labelWrap.appendChild(label);
+          labelWrap.appendChild(optionsText);
+
+          const renameBtn = document.createElement("button");
+          renameBtn.type = "button";
+          renameBtn.className = "chip-btn";
+          renameBtn.textContent = "Rename";
+          renameBtn.addEventListener("click", async () => {
+            setMsg(inspectionItemErr, "");
+            const nextLabel = await openPromptDialog({
+              title: "Rename Checklist Item",
+              text: "Rename inspection checklist item.",
+              label: "Item Label",
+              initialValue: item.label,
+              confirmLabel: "Save",
+              cancelLabel: "Cancel",
+            });
+            if (nextLabel === null) return;
+            const labelValue = nextLabel.trim();
+            if (!labelValue) {
+              setMsg(inspectionItemErr, "Inspection checklist item label is required.");
+              return;
+            }
+            try {
+              await api(`/api/inspections/form-items/${item.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ label: labelValue }),
+              });
+              await loadInspectionFormItems();
+            } catch (e) {
+              setMsg(inspectionItemErr, String(e.message || e));
+            }
+          });
+
+          const optionToggleButtons = INSPECTION_OPTION_DEFS.map((opt) => {
+            const toggleBtn = document.createElement("button");
+            const enabled = currentOptions[opt.key];
+            toggleBtn.type = "button";
+            toggleBtn.className = "chip-btn";
+            toggleBtn.textContent = `${opt.label} ${enabled ? "On" : "Off"}`;
+            toggleBtn.addEventListener("click", async () => {
+              setMsg(inspectionItemErr, "");
+              const nextOptions = { ...currentOptions, [opt.key]: !enabled };
+              if (!hasAnyInspectionOption(nextOptions)) {
+                setMsg(
+                  inspectionItemErr,
+                  "Each checklist item must keep at least one option enabled.",
+                );
+                return;
+              }
+              try {
+                await api(`/api/inspections/form-items/${item.id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ options: nextOptions }),
+                });
+                await loadInspectionFormItems();
+              } catch (e) {
+                setMsg(inspectionItemErr, String(e.message || e));
+              }
+            });
+            return toggleBtn;
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "chip-x";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            setMsg(inspectionItemErr, "");
+            const confirmed = await openConfirmDialog({
+              title: "Delete Checklist Item",
+              text: `Delete checklist item \"${item.label}\"?`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+            });
+            if (!confirmed) {
+              return;
+            }
+            try {
+              await api(`/api/inspections/form-items/${item.id}`, { method: "DELETE" });
+              await loadInspectionFormItems();
+            } catch (e) {
+              setMsg(inspectionItemErr, String(e.message || e));
+            }
+          });
+
+          chip.appendChild(labelWrap);
+          for (const btn of optionToggleButtons) {
+            chip.appendChild(btn);
+          }
+          chip.appendChild(renameBtn);
+          chip.appendChild(deleteBtn);
+          inspectionItemList.appendChild(chip);
+        }
+      }
+
+      function updateInventoryPreview() {
+        const a = assets.find((x) => x.id === invAssetSelect.value);
+        unitWrap.style.display = a ? "block" : "none";
+        invPrevType.textContent = a?.type ?? "-";
+        invPrevDesc.textContent = a?.description ?? "-";
+      }
+
+      function updateEditAssetsPreview() {
+        const a = assets.find((x) => x.id === editAssetsAssetSelect.value);
+        editAssetsDescription.value = a?.description ?? "";
+      }
+
+      async function loadAssets() {
+        const prevAssignAssetIds = selectedInspectionAssetIds();
+        const prevMaintenanceAssetIds = readMultiSelectValues(maintenanceRuleAssetIds);
+        assets = await api("/api/assets");
+        fillAssetSelect(invAssetSelect, assets.length ? "Select an asset..." : "No assets yet");
+        fillAssetSelect(editAssetsAssetSelect, assets.length ? "Select an asset..." : "No assets yet");
+        fillAssetSelect(editAsset, "Select an asset...");
+        renderInspectionAssetTypeSelect(prevAssignAssetIds);
+        renderMaintenanceRuleAssetSelect(prevMaintenanceAssetIds);
+        renderMaintenanceRules();
+        updateInventoryPreview();
+        updateEditAssetsPreview();
+      }
+
+      async function loadStatusOptions() {
+        const nextEditStatus = editStatus.value;
+        statusOptions = await api("/api/inventory-status-options");
+        if (statusOptions.length === 0) {
+          await api("/api/inventory-status-options", { method: "POST", body: JSON.stringify({ value: "Available" }) });
+          statusOptions = await api("/api/inventory-status-options");
+        }
+        fillStatusSelect(editStatus, "Select status...");
+        editStatus.value = statusOptions.some((s) => s.value === nextEditStatus) ? nextEditStatus : "";
+        renderStatusOptionList();
+      }
+
+      async function loadInspectionFormItems() {
+        if (!selectedInspectionFormId) {
+          inspectionFormItems = [];
+          renderInspectionItemList();
+          return;
+        }
+        const query = new URLSearchParams({
+          formId: selectedInspectionFormId,
+          includeInactive: "1",
+        });
+        inspectionFormItems = await api(`/api/inspections/form-items?${query.toString()}`);
+        renderInspectionItemList();
+      }
+
+      async function loadInspectionForms() {
+        inspectionForms = await api("/api/inspections/forms?includeInactive=1");
+        ensureSelectedInspectionFormId();
+        renderInspectionFormSelect();
+        renderMaintenanceRuleInspectionFormSelect();
+        renderMaintenanceRules();
+        renderMaintenanceTasks();
+      }
+
+      async function loadInspectionAssetMappings() {
+        inspectionAssetMappings = await api("/api/inspections/asset-mappings");
+        renderInspectionAssetTypeSelect();
+        renderInspectionAssignmentSummary();
+      }
+
+      async function loadTechnicians() {
+        technicians = await api("/api/tech-auth/technicians");
+        renderTechEntryPanel();
+        renderMaintenanceTasks();
+      }
+
+      function openEditModal(row) {
+        setMsg(editErr, "");
+        editId.value = row.id;
+        editUnitNumber.value = row.unitNumber || "";
+        editAsset.value = row.assetId;
+        editOriginalStatus = row.status || "";
+        ensureSelectOption(editStatus, row.status || "");
+        editStatus.value = row.status || "";
+        editHours.value = formatHours(row.hours);
+        openModal(editModal);
+      }
+
+      function renderInventory(rows) {
+        inventoryBody.innerHTML = "";
+        if (!rows || rows.length === 0) {
+          inventoryEmpty.style.display = "block";
+          return;
+        }
+        inventoryEmpty.style.display = "none";
+
+        const unitCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const sortedRows = [...rows].sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+
+        for (const r of sortedRows) {
+          const tr = document.createElement("tr");
+          const a = r.asset;
+          const statusLabel = r.inspectionRequired ? `${r.status ?? "-"} (Inspection Required)` : (r.status ?? "-");
+          tr.innerHTML = `
+            <td>${r.unitNumber ?? "-"}</td>
+            <td>${a?.type ?? "-"}</td>
+            <td>${a?.description ?? "-"}</td>
+            <td>${formatHours(r.hours) || "-"}</td>
+            <td>${statusLabel}</td>
+            <td>${formatLastRented(r.id)}</td>
+            <td><button class="secondary js-edit" type="button">Edit</button></td>
+          `;
+          tr.querySelector(".js-edit").addEventListener("click", () => openEditModal(r));
+          inventoryBody.appendChild(tr);
+        }
+      }
+
+      async function loadInventory() {
+        const prevMaintenanceUnitIds = readMultiSelectValues(maintenanceRuleUnitIds);
+        const [rows, reservationSnapshot] = await Promise.all([
+          api("/api/inventory"),
+          api("/api/reservations"),
+        ]);
+        inventoryRows = Array.isArray(rows) ? rows : [];
+        lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
+        renderInventory(inventoryRows);
+        renderMaintenanceRuleUnitSelect(prevMaintenanceUnitIds);
+        renderMaintenanceRules();
+      }
+
+      async function loadAdminData() {
+        await Promise.all([
+          loadAssets(),
+          loadStatusOptions(),
+          loadInspectionForms(),
+          loadInspectionAssetMappings(),
+          loadTechnicians(),
+        ]);
+        await loadInspectionFormItems();
+        renderInspectionAssignmentSummary();
+        resetMaintenanceRuleForm();
+        await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+      }
+
+      $("admin-login").addEventListener("click", async () => {
+        setMsg(adminAuthErr, "");
+        const password = adminPassword.value;
+        if (!password) {
+          setMsg(adminAuthErr, "Password is required.");
+          return;
+        }
+        try {
+          await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password }) });
+          adminPassword.value = "";
+          showAdminApp();
+          await loadAdminData();
+        } catch (e) {
+          setMsg(adminAuthErr, String(e.message || e));
+        }
+      });
+
+      adminPassword.addEventListener("keydown", async (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          $("admin-login").click();
+        }
+      });
+
+      $("admin-logout").addEventListener("click", async () => {
+        try {
+          await api("/api/admin/logout", { method: "POST" });
+        } catch (_e) {
+          // Ignore logout API errors and still reset local admin view.
+        }
+        [assetModal, inventoryModal, editAssetsModal, editModal].forEach(closeModal);
+        showAuthCard();
+        adminPassword.focus();
+      });
+
+      $("open-asset").addEventListener("click", () => { setMsg(assetErr, ""); openModal(assetModal); $("asset-type").focus(); });
+      $("open-inventory").addEventListener("click", () => {
+        setMsg(invErr, "");
+        openModal(inventoryModal);
+        updateInventoryPreview();
+      });
+      $("open-edit-assets").addEventListener("click", () => { setMsg(editAssetsErr, ""); openModal(editAssetsModal); updateEditAssetsPreview(); });
+      $("asset-cancel").addEventListener("click", () => closeModal(assetModal));
+      $("inv-cancel").addEventListener("click", () => closeModal(inventoryModal));
+      $("edit-assets-cancel").addEventListener("click", () => closeModal(editAssetsModal));
+      $("edit-cancel").addEventListener("click", () => closeModal(editModal));
+      invAssetSelect.addEventListener("change", updateInventoryPreview);
+      editAssetsAssetSelect.addEventListener("change", updateEditAssetsPreview);
+      inspectionFormSelect.addEventListener("change", async () => {
+        setMsg(inspectionItemErr, "");
+        selectedInspectionFormId = inspectionFormSelect.value || "";
+        renderInspectionFormSelect();
+        renderInspectionAssetTypeSelect();
+        renderInspectionAssignmentSummary();
+        try {
+          await loadInspectionFormItems();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionFormNewBtn.addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        const nextName = await openPromptDialog({
+          title: "Create Inspection Form",
+          text: "Enter a name for the new inspection form.",
+          label: "Form Name",
+          initialValue: "",
+          confirmLabel: "Create",
+          cancelLabel: "Cancel",
+        });
+        if (nextName === null) return;
+        const name = nextName.trim();
+        if (!name) {
+          setMsg(inspectionItemErr, "Inspection form name is required.");
+          return;
+        }
+        try {
+          await api("/api/inspections/forms", {
+            method: "POST",
+            body: JSON.stringify({ name }),
+          });
+          await loadInspectionForms();
+          selectedInspectionFormId =
+            inspectionForms[inspectionForms.length - 1]?.id || selectedInspectionFormId;
+          renderInspectionFormSelect();
+          await loadInspectionFormItems();
+          renderInspectionAssignmentSummary();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionFormDuplicateBtn.addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        const current = selectedInspectionForm();
+        if (!current) {
+          setMsg(inspectionItemErr, "Select an inspection form first.");
+          return;
+        }
+
+        const nextName = await openPromptDialog({
+          title: "Duplicate Inspection Form",
+          text: "Enter a name for the duplicated form.",
+          label: "Form Name",
+          initialValue: `${current.name || "Inspection Form"} Copy`,
+          confirmLabel: "Duplicate",
+          cancelLabel: "Cancel",
+        });
+        if (nextName === null) return;
+        const name = nextName.trim();
+        if (!name) {
+          setMsg(inspectionItemErr, "Inspection form name is required.");
+          return;
+        }
+
+        try {
+          const duplicatedForm = await api("/api/inspections/forms", {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              requireHourMeterEntry: current.requireHourMeterEntry === true,
+            }),
+          });
+
+          const sourceItems = await api(
+            `/api/inspections/form-items?formId=${encodeURIComponent(current.id)}&includeInactive=1`,
+          );
+          const orderedItems = [...(sourceItems || [])].sort(
+            (a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0),
+          );
+
+          for (const item of orderedItems) {
+            const createdItem = await api("/api/inspections/form-items", {
+              method: "POST",
+              body: JSON.stringify({
+                formId: duplicatedForm.id,
+                label: item.label,
+                options: item.options || {
+                  ok: item.allowOk === true,
+                  needsAttention: item.allowNeedsAttention === true,
+                  damaged: item.allowDamaged === true,
+                  na: item.allowNa === true,
+                },
+              }),
+            });
+            if (item.active === false) {
+              await api(`/api/inspections/form-items/${createdItem.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ active: false }),
+              });
+            }
+          }
+
+          await loadInspectionForms();
+          selectedInspectionFormId = duplicatedForm.id || selectedInspectionFormId;
+          renderInspectionFormSelect();
+          await loadInspectionFormItems();
+          renderInspectionAssignmentSummary();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionFormRenameBtn.addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        const current = selectedInspectionForm();
+        if (!current) {
+          setMsg(inspectionItemErr, "Select an inspection form first.");
+          return;
+        }
+        const nextName = await openPromptDialog({
+          title: "Rename Inspection Form",
+          text: "Enter a new form name.",
+          label: "Form Name",
+          initialValue: current.name || "",
+          confirmLabel: "Save",
+          cancelLabel: "Cancel",
+        });
+        if (nextName === null) return;
+        const name = nextName.trim();
+        if (!name) {
+          setMsg(inspectionItemErr, "Inspection form name is required.");
+          return;
+        }
+        try {
+          await api(`/api/inspections/forms/${current.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name }),
+          });
+          await loadInspectionForms();
+          renderInspectionAssignmentSummary();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionFormDeleteBtn.addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        const current = selectedInspectionForm();
+        if (!current) {
+          setMsg(inspectionItemErr, "Select an inspection form first.");
+          return;
+        }
+        const confirmed = await openConfirmDialog({
+          title: "Delete Inspection Form",
+          text: `Delete inspection form \"${current.name}\"? This only works if no asset type is assigned to it.`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+        });
+        if (!confirmed) return;
+        try {
+          await api(`/api/inspections/forms/${current.id}`, { method: "DELETE" });
+          await loadInspectionForms();
+          await loadInspectionAssetMappings();
+          await loadInspectionFormItems();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionAssignFormBtn.addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        const form = selectedInspectionForm();
+        if (!form) {
+          setMsg(inspectionItemErr, "Select an inspection form first.");
+          return;
+        }
+        const assetIds = selectedInspectionAssetIds();
+        if (assetIds.length === 0) {
+          setMsg(inspectionItemErr, "Select one or more asset types to assign.");
+          return;
+        }
+        try {
+          await Promise.all(
+            assetIds.map((assetId) =>
+              api(`/api/inspections/asset-mappings/${assetId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ formId: form.id }),
+              }),
+            ),
+          );
+          await Promise.all([loadInspectionAssetMappings(), loadInspectionForms()]);
+          renderInspectionFormSelect();
+          renderInspectionAssetTypeSelect(assetIds);
+          renderInspectionAssignmentSummary();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+      inspectionRequireHours.addEventListener("change", async () => {
+        setMsg(inspectionItemErr, "");
+        const current = selectedInspectionForm();
+        if (!current) {
+          inspectionRequireHours.checked = false;
+          return;
+        }
+        const nextValue = inspectionRequireHours.checked === true;
+        inspectionRequireHours.disabled = true;
+        try {
+          await api(`/api/inspections/forms/${current.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ requireHourMeterEntry: nextValue }),
+          });
+          await loadInspectionForms();
+          renderInspectionFormSelect();
+        } catch (e) {
+          inspectionRequireHours.checked = current.requireHourMeterEntry === true;
+          setMsg(inspectionItemErr, String(e.message || e));
+        } finally {
+          inspectionRequireHours.disabled = false;
+        }
+      });
+
+      maintenanceRuleScopeType.addEventListener("change", () => {
+        updateMaintenanceScopeVisibility();
+      });
+
+      maintenanceRuleResetBtn.addEventListener("click", () => {
+        setMsg(maintenanceRuleErr, "");
+        resetMaintenanceRuleForm();
+      });
+
+      maintenanceRuleSaveBtn.addEventListener("click", async () => {
+        setMsg(maintenanceRuleErr, "");
+        const parsed = maintenanceRulePayloadFromForm();
+        if (!parsed.ok) {
+          setMsg(maintenanceRuleErr, parsed.error);
+          return;
+        }
+
+        const ruleId = String(maintenanceRuleId.value || "").trim();
+        try {
+          if (ruleId) {
+            await api(`/api/maintenance-automation/rules/${ruleId}`, {
+              method: "PATCH",
+              body: JSON.stringify(parsed.payload),
+            });
+          } else {
+            await api("/api/maintenance-automation/rules", {
+              method: "POST",
+              body: JSON.stringify(parsed.payload),
+            });
+          }
+          resetMaintenanceRuleForm();
+          await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+        } catch (e) {
+          setMsg(maintenanceRuleErr, String(e.message || e));
+        }
+      });
+
+      maintenanceRulesRefreshBtn.addEventListener("click", async () => {
+        setMsg(maintenanceRuleErr, "");
+        try {
+          await loadMaintenanceRules();
+        } catch (e) {
+          setMsg(maintenanceRuleErr, String(e.message || e));
+        }
+      });
+
+      maintenanceRecheckAllBtn.addEventListener("click", async () => {
+        setMsg(maintenanceRuleErr, "");
+        const originalText = maintenanceRecheckAllBtn.textContent;
+        maintenanceRecheckAllBtn.disabled = true;
+        maintenanceRecheckAllBtn.textContent = "Rechecking...";
+        try {
+          await api("/api/maintenance-automation/recheck-all", { method: "POST" });
+          await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+        } catch (e) {
+          setMsg(maintenanceRuleErr, String(e.message || e));
+        } finally {
+          maintenanceRecheckAllBtn.disabled = false;
+          maintenanceRecheckAllBtn.textContent = originalText;
+        }
+      });
+
+      maintenanceTasksRefreshBtn.addEventListener("click", async () => {
+        setMsg(maintenanceTaskErr, "");
+        try {
+          await loadMaintenanceTasks();
+        } catch (e) {
+          setMsg(maintenanceTaskErr, String(e.message || e));
+        }
+      });
+
+      maintenanceTaskFilter.addEventListener("change", async () => {
+        setMsg(maintenanceTaskErr, "");
+        try {
+          await loadMaintenanceTasks();
+        } catch (e) {
+          setMsg(maintenanceTaskErr, String(e.message || e));
+        }
+      });
+
+      $("asset-save").addEventListener("click", async () => {
+        setMsg(assetErr, "");
+        const typeCode = $("asset-type").value.trim();
+        const payload = {
+          typeCode,
+          description: $("asset-description").value.trim() || null,
+        };
+        try {
+          await api("/api/assets", { method: "POST", body: JSON.stringify(payload) });
+          ["asset-type", "asset-description"].forEach((id) => { $(id).value = ""; });
+          closeModal(assetModal);
+          await Promise.all([loadAssets(), loadInspectionAssetMappings(), loadInspectionForms()]);
+          renderInspectionFormSelect();
+          renderInspectionAssignmentSummary();
+          await loadMaintenanceRules();
+        } catch (e) {
+          setMsg(assetErr, String(e.message || e));
+        }
+      });
+
+      $("remove-asset-type").addEventListener("click", async () => {
+        setMsg(editAssetsErr, "");
+        if (!editAssetsAssetSelect.value) {
+          setMsg(editAssetsErr, "Select an Asset Type to remove.");
+          return;
+        }
+        try {
+          await api(`/api/assets/${editAssetsAssetSelect.value}`, { method: "DELETE" });
+          await Promise.all([loadAssets(), loadInspectionAssetMappings(), loadInspectionForms()]);
+          renderInspectionFormSelect();
+          renderInspectionAssignmentSummary();
+          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+        } catch (e) {
+          setMsg(editAssetsErr, String(e.message || e));
+        }
+      });
+
+      $("save-asset-description").addEventListener("click", async () => {
+        setMsg(editAssetsErr, "");
+        if (!editAssetsAssetSelect.value) {
+          setMsg(editAssetsErr, "Select an Asset Type first.");
+          return;
+        }
+        const description = editAssetsDescription.value.trim();
+        try {
+          await api(`/api/assets/${editAssetsAssetSelect.value}`, {
+            method: "PATCH",
+            body: JSON.stringify({ description }),
+          });
+          await Promise.all([loadAssets(), loadInspectionAssetMappings()]);
+          renderInspectionAssignmentSummary();
+          await Promise.all([loadInventory(), loadMaintenanceRules()]);
+        } catch (e) {
+          setMsg(editAssetsErr, String(e.message || e));
+        }
+      });
+
+      $("add-status-option").addEventListener("click", async () => {
+        setMsg(editAssetsErr, "");
+        const value = $("new-status-option").value.trim();
+        if (!value) return;
+        try {
+          await api("/api/inventory-status-options", { method: "POST", body: JSON.stringify({ value }) });
+          $("new-status-option").value = "";
+          await loadStatusOptions();
+        } catch (e) {
+          setMsg(editAssetsErr, String(e.message || e));
+        }
+      });
+
+      techEntrySelect.addEventListener("change", () => {
+        selectedTechnicianId = String(techEntrySelect.value || "").trim();
+        setMsg(techEntryErr, "");
+        setMsg(techEntrySuccess, "");
+        renderTechEntryPanel();
+      });
+
+      techEntryNew.addEventListener("click", () => {
+        selectedTechnicianId = "";
+        setMsg(techEntryErr, "");
+        setMsg(techEntrySuccess, "");
+        renderTechEntryPanel();
+        techEntryName.focus();
+      });
+
+      techEntrySave.addEventListener("click", async () => {
+        setMsg(techEntryErr, "");
+        setMsg(techEntrySuccess, "");
+        const techName = techEntryName.value.trim();
+        const username = techEntryUsername.value.trim();
+        const password = techEntryPassword.value;
+        if (!techName || !username || !password) {
+          setMsg(techEntryErr, "Tech name, username, and password are required.");
+          return;
+        }
+        const originalText = techEntrySave.textContent;
+        techEntrySave.disabled = true;
+        techEntrySave.textContent = "Saving...";
+        try {
+          const wasUpdating = Boolean(selectedTechnicianId);
+          const endpoint = wasUpdating
+            ? `/api/tech-auth/technicians/${encodeURIComponent(selectedTechnicianId)}`
+            : "/api/tech-auth/technicians";
+          const method = wasUpdating ? "PATCH" : "POST";
+          const savedTechnician = await api(endpoint, {
+            method,
+            body: JSON.stringify({ techName, username, password }),
+          });
+          selectedTechnicianId = String(savedTechnician?.id || "").trim();
+          await loadTechnicians();
+          setMsg(techEntrySuccess, wasUpdating ? "Technician updated." : "Technician added.");
+        } catch (e) {
+          setMsg(techEntryErr, String(e.message || e));
+        } finally {
+          techEntrySave.disabled = false;
+          techEntrySave.textContent = originalText;
+        }
+      });
+
+      techEntryPassword.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          techEntrySave.click();
+        }
+      });
+
+      techEntryName.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          techEntrySave.click();
+        }
+      });
+
+      techEntryUsername.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          techEntrySave.click();
+        }
+      });
+
+      $("add-inspection-item").addEventListener("click", async () => {
+        setMsg(inspectionItemErr, "");
+        if (!selectedInspectionFormId) {
+          setMsg(inspectionItemErr, "Select or create an inspection form first.");
+          return;
+        }
+        const label = $("new-inspection-item").value.trim();
+        if (!label) {
+          setMsg(inspectionItemErr, "Inspection checklist item label is required.");
+          return;
+        }
+        const options = getNewInspectionOptions();
+        if (!hasAnyInspectionOption(options)) {
+          setMsg(
+            inspectionItemErr,
+            "Select at least one option (Ok, Needs attention, Damaged, or N/A).",
+          );
+          return;
+        }
+        try {
+          await api("/api/inspections/form-items", {
+            method: "POST",
+            body: JSON.stringify({ formId: selectedInspectionFormId, label, options }),
+          });
+          $("new-inspection-item").value = "";
+          await loadInspectionFormItems();
+          await loadInspectionForms();
+          renderInspectionFormSelect();
+        } catch (e) {
+          setMsg(inspectionItemErr, String(e.message || e));
+        }
+      });
+
+      $("new-inspection-item").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          $("add-inspection-item").click();
+        }
+      });
+
+      $("inv-save").addEventListener("click", async () => {
+        setMsg(invErr, "");
+        if (!invAssetSelect.value) {
+          setMsg(invErr, "Select an Asset first.");
+          return;
+        }
+        const unitNumber = invUnitNumber.value.trim();
+        if (!unitNumber) {
+          setMsg(invErr, "Unit Number is required.");
+          return;
+        }
+        const parsedHours = parseHoursInput(invHours.value);
+        if (!parsedHours.ok) {
+          setMsg(invErr, parsedHours.error);
+          return;
+        }
+        try {
+          await api("/api/inventory", {
+            method: "POST",
+            body: JSON.stringify({
+              assetId: invAssetSelect.value,
+              unitNumber,
+              hours: parsedHours.value,
+            }),
+          });
+          invUnitNumber.value = "";
+          invHours.value = "";
+          closeModal(inventoryModal);
+          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+        } catch (e) {
+          setMsg(invErr, String(e.message || e));
+        }
+      });
+
+      $("edit-save").addEventListener("click", async () => {
+        setMsg(editErr, "");
+        const id = editId.value;
+        const assetId = editAsset.value;
+        const unitNumber = editUnitNumber.value.trim();
+        const status = editStatus.value || editOriginalStatus;
+        const parsedHours = parseHoursInput(editHours.value);
+        if (!id || !assetId || !unitNumber || !status) {
+          setMsg(editErr, "Asset, Unit Number, and Status are required.");
+          return;
+        }
+        if (!parsedHours.ok) {
+          setMsg(editErr, parsedHours.error);
+          return;
+        }
+        try {
+          await api(`/api/inventory/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ assetId, unitNumber, status, hours: parsedHours.value }),
+          });
+          closeModal(editModal);
+          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+        } catch (e) {
+          setMsg(editErr, String(e.message || e));
+        }
+      });
+
+      $("edit-delete").addEventListener("click", async () => {
+        const id = editId.value;
+        if (!id) return;
+        try {
+          await api(`/api/inventory/${id}`, { method: "DELETE" });
+          closeModal(editModal);
+          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+        } catch (e) {
+          setMsg(editErr, String(e.message || e));
+        }
+      });
+
+      async function bootstrap() {
+        showAuthCard();
+        setMsg(adminAuthErr, "");
+
+        try {
+          const session = await api("/api/admin/session");
+          adminDefaultHint.style.display = session.defaultPasswordInUse ? "block" : "none";
+
+          if (session.authenticated) {
+            showAdminApp();
+            await loadAdminData();
+            return;
+          }
+
+          adminPassword.focus();
+        } catch (e) {
+          setMsg(adminAuthErr, "Failed to check admin session: " + String(e.message || e));
+        }
+      }
+
+      bootstrap();
+    </script>
+  </body>
+</html>
+

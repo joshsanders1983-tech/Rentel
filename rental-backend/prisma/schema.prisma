@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Asset "types" used to rent units.
+/// Asset Entry fields: Asset, Type, Description.
+model Asset {
+  id          String        @id @default(cuid())
+  asset       String        @unique
+  type        String
+  description String?
+  active      Boolean       @default(true)
+  inspectionFormId String?
+  inspectionForm   InspectionForm? @relation(fields: [inspectionFormId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+
+  inventory Inventory[]
+
+  @@index([inspectionFormId])
+}
+
+/// Inventory Entry stores individual rentable units.
+model Inventory {
+  id         String   @id @default(cuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  unitNumber String
+  hours      Float?
+  status     String   @default("AVAILABLE")
+  downReason String?
+  inspectionRequired         Boolean              @default(false)
+  lastInspectionCompletedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  inspectionSubmissions InspectionSubmission[]
+  onRentHourSnapshots  OnRentHourSnapshot[]
+  repairHistoryEntries RepairHistoryEntry[]
+
+  @@index([assetId])
+  @@unique([unitNumber])
+}
+
+/// Service/tech repair timeline entries for a single cart.
+model RepairHistoryEntry {
+  id          String   @id @default(cuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  action      String
+  details     String?
+  techName    String?
+  repairHours Float?
+  createdAt   DateTime @default(now())
+
+  @@index([inventoryId, createdAt])
+}
+
+/// User-defined options for the Inventory status dropdown.
+model InventoryStatusOption {
+  id        String   @id @default(cuid())
+  value     String   @unique
+  createdAt DateTime @default(now())
+}
+
+/// Admin-defined checklist items used when inspecting returned units.
+model InspectionFormItem {
+  id        String   @id @default(cuid())
+  formId    String
+  form      InspectionForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  label     String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  allowOk             Boolean  @default(true)
+  allowNeedsAttention Boolean  @default(true)
+  allowDamaged        Boolean  @default(true)
+  allowNa             Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responseItems InspectionSubmissionItem[]
+
+  @@index([formId, active, sortOrder])
+}
+
+/// One completed inspection tied to a specific inventory unit.
+model InspectionSubmission {
+  id          String   @id @default(cuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  formId      String?
+  form        InspectionForm? @relation(fields: [formId], references: [id], onDelete: SetNull)
+  submittedAt DateTime @default(now())
+  hourMeterReading Float?
+
+  itemResults InspectionSubmissionItem[]
+
+  @@index([inventoryId, submittedAt])
+}
+
+/// Admin-defined form templates used for inspections.
+model InspectionForm {
+  id                    String   @id @default(cuid())
+  name                  String
+  active                Boolean  @default(true)
+  requireHourMeterEntry Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  assets       Asset[]
+  items        InspectionFormItem[]
+  submissions  InspectionSubmission[]
+}
+
+/// Per-item values captured at inspection submission time.
+model InspectionSubmissionItem {
+  id            String   @id @default(cuid())
+  submissionId  String
+  formItemId    String?
+  labelSnapshot String
+  checked       Boolean
+  selectedOk             Boolean @default(false)
+  selectedNeedsAttention Boolean @default(false)
+  selectedDamaged        Boolean @default(false)
+  selectedNa             Boolean @default(false)
+
+  submission InspectionSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  formItem   InspectionFormItem?  @relation(fields: [formItemId], references: [id], onDelete: SetNull)
+
+  @@index([submissionId])
+  @@index([formItemId])
+}
+
+/// Global inspection form settings managed from Admin.
+model InspectionConfig {
+  id                    String   @id @default("default")
+  requireHourMeterEntry Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+/// Captures a unit's hour meter when it transitions to On Rent.
+model OnRentHourSnapshot {
+  id            String   @id @default(cuid())
+  inventoryId   String
+  hoursAtOnRent Float?
+  capturedAt    DateTime @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryId, capturedAt])
+}
+
+/// Tech login accounts managed from Admin > Tech Entry.
+model Technician {
+  id        String   @id @default(cuid())
+  techName  String
+  username  String   @unique
+  password  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, techName])
+}

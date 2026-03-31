@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Returned</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; --ok:#76d59b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link-admin { margin-left:auto; }
+      main { max-width:1250px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+      .card h2 { margin:0 0 12px; font-size:15px; }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+      tbody td { padding:10px 12px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody tr:last-child td { border-bottom:0; }
+      .empty { color:var(--muted); font-size:13px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .msg.ok { color:var(--ok); }
+      .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+      .actions { display:flex; flex-wrap:wrap; gap:6px; }
+      .btn { background:var(--accent); border:0; color:#fff; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:12px; font-weight:600; }
+      .btn.secondary { background:#3a4a5e; }
+      .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:18px; z-index:50; }
+      .modal-overlay.open { display:flex; }
+      .modal { width:560px; max-width:100%; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+      .modal header { border-bottom:1px solid var(--border); background:rgba(26,35,50,.95); }
+      .modal .modal-body { padding:16px; }
+      .modal .modal-actions { display:flex; gap:10px; justify-content:flex-end; padding:14px 16px; border-top:1px solid var(--border); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Returned</h1>
+      <div class="sub">Ended On Rent entries. Use Place back on Rent if one was returned by mistake.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link active" href="/returned">Returned</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>Returned Entries</h2>
+        <div id="returned-empty" class="empty" style="display:none;">No returned entries found.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Returned At</th>
+              <th>Order Number</th>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Type(s)</th>
+              <th>Unit Number(s)</th>
+              <th style="width:170px;">Options</th>
+            </tr>
+          </thead>
+          <tbody id="returned-body"></tbody>
+        </table>
+        <div id="returned-msg" class="msg" style="display:none;"></div>
+      </div>
+    </main>
+
+    <div id="restore-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="modal">
+        <header>
+          <h2 style="margin:0;font-size:15px;">Confirm Move</h2>
+        </header>
+        <div class="modal-body">
+          <div id="restore-question" style="font-size:14px; line-height:1.5;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn secondary" id="restore-cancel" type="button">Cancel</button>
+          <button class="btn" id="restore-yes" type="button">Yes</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const returnedBody = $("returned-body");
+      const returnedEmpty = $("returned-empty");
+      const returnedMsg = $("returned-msg");
+
+      let returnedEntries = [];
+      let pendingRestoreId = "";
+
+      function setMsg(message, ok = false) {
+        returnedMsg.style.display = message ? "block" : "none";
+        returnedMsg.className = ok ? "msg ok" : "msg";
+        returnedMsg.textContent = message || "";
+      }
+
+      function normalizeKeyPart(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function onRentBatchKey(entry) {
+        return [
+          normalizeKeyPart(entry.customerName),
+          normalizeKeyPart(entry.startDate),
+          normalizeKeyPart(entry.startTime),
+        ].join("|");
+      }
+
+      function assignedUnitNumbers(entry) {
+        const units = Array.isArray(entry.assignedUnits) ? entry.assignedUnits : [];
+        if (units.length === 0) return "-";
+        return units.map((unit) => unit.unitNumber).join(", ");
+      }
+
+      function assignedTypes(entry) {
+        const units = Array.isArray(entry.assignedUnits) ? entry.assignedUnits : [];
+        if (units.length === 0) return "-";
+        const unique = Array.from(new Set(units.map((unit) => unit.type).filter(Boolean)));
+        return unique.join(", ") || "-";
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error(data && data.error ? data.error : "Request failed");
+        return data;
+      }
+
+      function batchEntriesFor(entryId) {
+        const target = returnedEntries.find((entry) => entry.id === entryId);
+        if (!target) return [];
+        const batchKey = onRentBatchKey(target);
+        return returnedEntries.filter((entry) => onRentBatchKey(entry) === batchKey);
+      }
+
+      function buildBatchSummary(entries) {
+        const customers = Array.from(new Set(entries.map((entry) => entry.customerName).filter(Boolean))).join(", ") || "-";
+        const allUnits = entries.flatMap((entry) => (Array.isArray(entry.assignedUnits) ? entry.assignedUnits : []));
+        const unitNumbers = allUnits.map((unit) => unit.unitNumber).filter(Boolean).join(", ") || "-";
+        return { customers, unitNumbers };
+      }
+
+      function openRestoreModal(entryId) {
+        const entries = batchEntriesFor(entryId);
+        if (entries.length === 0) return;
+        pendingRestoreId = entryId;
+        const summary = buildBatchSummary(entries);
+        $("restore-question").textContent = `Place (${summary.customers}) (${summary.unitNumbers}) back On Rent?`;
+        const modal = $("restore-modal");
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeRestoreModal() {
+        pendingRestoreId = "";
+        const modal = $("restore-modal");
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+      }
+
+      function renderReturned(entries) {
+        returnedBody.innerHTML = "";
+
+        if (!entries || entries.length === 0) {
+          returnedEmpty.style.display = "block";
+          return;
+        }
+        returnedEmpty.style.display = "none";
+
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${entry.returnedAt ? new Date(entry.returnedAt).toLocaleString() : "-"}</td>
+            <td class="mono">${escapeHtml(entry.orderNumber)}</td>
+            <td>${escapeHtml(entry.customerName)}</td>
+            <td>${escapeHtml(entry.address)}</td>
+            <td>${escapeHtml(entry.startDate)} ${escapeHtml(entry.startTime)}</td>
+            <td>${escapeHtml(entry.endDate)} ${escapeHtml(entry.endTime)}</td>
+            <td>${escapeHtml(assignedTypes(entry))}</td>
+            <td>${escapeHtml(assignedUnitNumbers(entry))}</td>
+            <td>
+              <div class="actions">
+                <button class="btn js-restore" type="button">Place back on Rent</button>
+              </div>
+            </td>
+          `;
+
+          tr.querySelector(".js-restore").addEventListener("click", () => openRestoreModal(entry.id));
+          returnedBody.appendChild(tr);
+        }
+      }
+
+      async function loadReturned() {
+        try {
+          setMsg("");
+          const snapshot = await api("/api/reservations");
+          returnedEntries = (snapshot && snapshot.returnedOnRent) || [];
+          renderReturned(returnedEntries);
+        } catch (err) {
+          setMsg("Failed to load returned entries: " + String(err.message || err));
+          returnedEntries = [];
+          renderReturned([]);
+        }
+      }
+
+      $("restore-cancel").addEventListener("click", closeRestoreModal);
+      $("restore-modal").addEventListener("click", (event) => {
+        if (event.target === $("restore-modal")) closeRestoreModal();
+      });
+
+      $("restore-yes").addEventListener("click", async () => {
+        if (!pendingRestoreId) return;
+        try {
+          const result = await api(`/api/reservations/returned/${encodeURIComponent(pendingRestoreId)}/restore`, {
+            method: "POST",
+          });
+          closeRestoreModal();
+          await loadReturned();
+          const restoredEntries = Number(result && result.restoredEntries ? result.restoredEntries : 0);
+          const onRentUnits = Number(result && result.onRentUnits ? result.onRentUnits : 0);
+          setMsg(`Placed ${onRentUnits} unit(s) from ${restoredEntries} entr${restoredEntries === 1 ? "y" : "ies"} back On Rent.`, true);
+        } catch (err) {
+          closeRestoreModal();
+          setMsg(String(err.message || err));
+        }
+      });
+
+      loadReturned();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,651 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservations</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; --ok:#76d59b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link.disabled { opacity:.55; pointer-events:none; }
+      .nav-link-admin { margin-left:auto; }
+      main { max-width:1250px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+      .card h2 { margin:0 0 12px; font-size:15px; }
+      .grid-4 { display:grid; grid-template-columns:repeat(4,minmax(170px,1fr)); gap:12px; }
+      .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+      @media (max-width: 980px) { .grid-4 { grid-template-columns:repeat(2,minmax(170px,1fr)); } .grid-2{ grid-template-columns:1fr; } }
+      @media (max-width: 620px) { .grid-4 { grid-template-columns:1fr; } }
+      label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+      input, select, textarea { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:#0d1117; color:var(--text); outline:none; }
+      input[type="date"] { color-scheme: dark; }
+      input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(1.15); opacity:1; cursor:pointer; }
+      textarea { min-height:72px; resize:vertical; }
+      .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+      .btn { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      .btn.secondary { background:#3a4a5e; }
+      .btn.danger { background:#b24242; }
+      .btn.warn { background:#986a2f; }
+      .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .msg.ok { color:var(--ok); }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody tr:last-child td { border-bottom:0; }
+      .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+      .empty { color:var(--muted); font-size:13px; }
+      .actions { display:flex; flex-wrap:wrap; gap:6px; }
+      .small { padding:6px 10px; font-size:12px; border-radius:7px; }
+      .modal-backdrop { position:fixed; inset:0; background:rgba(6,9,13,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+      .modal { width:100%; max-width:560px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+      .modal h3 { margin:0; font-size:16px; }
+      .modal p { margin:10px 0 0; color:var(--text); line-height:1.45; white-space:pre-wrap; }
+      .modal .subtext { color:var(--muted); font-size:12px; margin-top:8px; white-space:pre-wrap; max-height:180px; overflow:auto; }
+      .modal label { display:block; margin-top:12px; font-size:12px; color:var(--muted); }
+      .modal input { width:100%; margin-top:6px; }
+      .modal-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin-top:14px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Reservations</h1>
+      <div class="sub">Create reservations, auto-assign units fairly, activate to On Rent, or move entries to Potential.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link active" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>New Reservation</h2>
+        <div class="grid-4">
+          <div>
+            <label for="res-customer">Customer Name</label>
+            <input id="res-customer" />
+          </div>
+          <div>
+            <label for="res-address">Address</label>
+            <input id="res-address" />
+          </div>
+          <div>
+            <label for="res-start-date">Start Date</label>
+            <input id="res-start-date" type="date" />
+          </div>
+          <div>
+            <label for="res-start-time">Start Time</label>
+            <select id="res-start-time"></select>
+          </div>
+          <div>
+            <label for="res-end-date">End Date</label>
+            <input id="res-end-date" type="date" />
+          </div>
+          <div>
+            <label for="res-end-time">End Time</label>
+            <select id="res-end-time"></select>
+          </div>
+          <div>
+            <label for="res-type">Type</label>
+            <select id="res-type"></select>
+          </div>
+          <div>
+            <label for="res-qty">Quantity</label>
+            <select id="res-qty"></select>
+          </div>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">Units are auto-assigned from Available inventory using least-recently-rented first.</div>
+
+        <div class="row" style="margin-top:12px; justify-content:flex-end;">
+          <button class="btn danger" id="res-cancel" type="button">Cancel</button>
+          <button class="btn" id="res-create" type="button">Create Reservation</button>
+        </div>
+        <div id="res-msg" class="msg" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;">
+          <h2 style="margin:0;">Upcoming Orders</h2>
+          <div class="actions">
+            <button class="btn small" id="batch-activate" type="button">Activate Selected</button>
+            <button class="btn danger small" id="batch-cancel" type="button">Cancel Selected</button>
+            <button class="btn warn small" id="batch-potential" type="button">Convert to Potential</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-bottom:8px;">Activate Selected and Convert to Potential require all entries with the same customer and start/end date+time to be selected.</div>
+        <div class="empty" id="res-empty" style="display:none;">No reservations yet.</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:38px;"></th>
+              <th>Order Number</th>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Start Date</th>
+              <th>Start Time</th>
+              <th>End Date</th>
+              <th>End Time</th>
+              <th>Type</th>
+              <th>Quantity</th>
+              <th>Assigned Units</th>
+              <th style="width:220px;">Options</th>
+            </tr>
+          </thead>
+          <tbody id="reservation-body"></tbody>
+        </table>
+      </div>
+
+    </main>
+
+    <div class="modal-backdrop" id="confirm-modal" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+        <h3 id="confirm-modal-title"></h3>
+        <p id="confirm-modal-text"></p>
+        <div class="modal-actions">
+          <button class="btn secondary" id="confirm-modal-cancel" type="button">Cancel</button>
+          <button class="btn" id="confirm-modal-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="prompt-modal" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title">
+        <h3 id="prompt-modal-title"></h3>
+        <p id="prompt-modal-text"></p>
+        <div id="prompt-modal-subtext" class="subtext" style="display:none;"></div>
+        <label for="prompt-modal-input" id="prompt-modal-label">Value</label>
+        <input id="prompt-modal-input" autocomplete="off" />
+        <div class="modal-actions">
+          <button class="btn secondary" id="prompt-modal-cancel" type="button">Cancel</button>
+          <button class="btn" id="prompt-modal-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const resMsg = $("res-msg");
+
+      let assets = [];
+      let inventoryRows = [];
+      let reservations = [];
+      let confirmResolver = null;
+      let promptResolver = null;
+
+      function setMsg(message, ok = false) {
+        resMsg.style.display = message ? "block" : "none";
+        resMsg.className = ok ? "msg ok" : "msg";
+        resMsg.textContent = message || "";
+      }
+
+      function openConfirmModal(options) {
+        const title = options && options.title ? options.title : "Confirm";
+        const text = options && options.text ? options.text : "";
+        const confirmLabel = options && options.confirmLabel ? options.confirmLabel : "Confirm";
+        const cancelLabel = options && options.cancelLabel ? options.cancelLabel : "Cancel";
+
+        $("confirm-modal-title").textContent = title;
+        $("confirm-modal-text").textContent = text;
+        $("confirm-modal-confirm").textContent = confirmLabel;
+        $("confirm-modal-cancel").textContent = cancelLabel;
+        $("confirm-modal").style.display = "flex";
+        $("confirm-modal").setAttribute("aria-hidden", "false");
+
+        return new Promise((resolve) => {
+          confirmResolver = resolve;
+        });
+      }
+
+      function closeConfirmModal(result) {
+        if (typeof confirmResolver === "function") {
+          confirmResolver(Boolean(result));
+        }
+        confirmResolver = null;
+        $("confirm-modal").style.display = "none";
+        $("confirm-modal").setAttribute("aria-hidden", "true");
+      }
+
+      function openPromptModal(options) {
+        const title = options && options.title ? options.title : "Enter Value";
+        const text = options && options.text ? options.text : "";
+        const subtext = options && options.subtext ? options.subtext : "";
+        const label = options && options.label ? options.label : "Value";
+        const initialValue = options && typeof options.initialValue === "string" ? options.initialValue : "";
+        const confirmLabel = options && options.confirmLabel ? options.confirmLabel : "Confirm";
+        const cancelLabel = options && options.cancelLabel ? options.cancelLabel : "Cancel";
+
+        $("prompt-modal-title").textContent = title;
+        $("prompt-modal-text").textContent = text;
+        const subtextEl = $("prompt-modal-subtext");
+        subtextEl.style.display = subtext ? "block" : "none";
+        subtextEl.textContent = subtext;
+        $("prompt-modal-label").textContent = label;
+        $("prompt-modal-input").value = initialValue;
+        $("prompt-modal-confirm").textContent = confirmLabel;
+        $("prompt-modal-cancel").textContent = cancelLabel;
+
+        $("prompt-modal").style.display = "flex";
+        $("prompt-modal").setAttribute("aria-hidden", "false");
+        $("prompt-modal-input").focus();
+
+        return new Promise((resolve) => {
+          promptResolver = resolve;
+        });
+      }
+
+      function closePromptModal(result) {
+        if (typeof promptResolver === "function") {
+          promptResolver(result);
+        }
+        promptResolver = null;
+        $("prompt-modal").style.display = "none";
+        $("prompt-modal").setAttribute("aria-hidden", "true");
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error((data && data.error) || "Request failed");
+        return data;
+      }
+
+      function uniqueTypes() {
+        const types = new Set();
+        for (const a of assets) types.add(a.type);
+        return Array.from(types).sort((a, b) => String(a).localeCompare(String(b)));
+      }
+
+      function renderTypeOptions() {
+        const select = $("res-type");
+        select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = "Select type...";
+        select.appendChild(ph);
+        for (const t of uniqueTypes()) {
+          const opt = document.createElement("option");
+          opt.value = t;
+          opt.textContent = t;
+          select.appendChild(opt);
+        }
+      }
+
+      function formatTimeLabel(hour24, minute) {
+        const suffix = hour24 >= 12 ? "PM" : "AM";
+        const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+        return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+      }
+
+      function populateTimeSelect(selectId) {
+        const select = $(selectId);
+        if (!select) return;
+        select.innerHTML = "";
+
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = "Select time...";
+        select.appendChild(ph);
+
+        for (let minutes = 7 * 60; minutes <= 19 * 60; minutes += 30) {
+          const hour24 = Math.floor(minutes / 60);
+          const minute = minutes % 60;
+          const value = `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = formatTimeLabel(hour24, minute);
+          select.appendChild(opt);
+        }
+      }
+
+      function populateQuantitySelect() {
+        const select = $("res-qty");
+        if (!select) return;
+        select.innerHTML = "";
+        for (let i = 1; i <= 10; i += 1) {
+          const opt = document.createElement("option");
+          opt.value = String(i);
+          opt.textContent = String(i);
+          if (i === 1) opt.selected = true;
+          select.appendChild(opt);
+        }
+      }
+
+      function wireDatePicker(inputId) {
+        const input = $(inputId);
+        if (!input) return;
+        const open = () => {
+          if (typeof input.showPicker === "function") {
+            try {
+              input.showPicker();
+            } catch {
+              // Browser may block showPicker in some contexts; native picker still works on click.
+            }
+          }
+        };
+        input.addEventListener("focus", open);
+        input.addEventListener("click", open);
+      }
+
+      function assignedUnitsText(entry) {
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        return entry.assignedUnits.map((u) => `${u.unitNumber} (${u.type})`).join(", ");
+      }
+
+      function assignedUnitNumbers(entry) {
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        return entry.assignedUnits.map((u) => u.unitNumber).join(", ");
+      }
+
+      function assignedTypes(entry) {
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        const set = new Set(entry.assignedUnits.map((u) => u.type));
+        return Array.from(set).join(", ");
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function batchGroupKey(entry) {
+        return [
+          String(entry.customerName || "").trim().toLowerCase(),
+          String(entry.startDate || "").trim(),
+          String(entry.startTime || "").trim(),
+          String(entry.endDate || "").trim(),
+          String(entry.endTime || "").trim(),
+        ].join("|");
+      }
+
+      function parseLocalDateTime(dateValue, timeValue) {
+        if (!dateValue || !timeValue) return null;
+        const [y, m, d] = String(dateValue).split("-").map((v) => Number(v));
+        const [hh, mm] = String(timeValue).split(":").map((v) => Number(v));
+        if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
+          return null;
+        }
+        return new Date(y, m - 1, d, hh, mm, 0, 0);
+      }
+
+      function renderReservations() {
+        const body = $("reservation-body");
+        const empty = $("res-empty");
+        body.innerHTML = "";
+        if (!reservations || reservations.length === 0) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        for (const r of reservations) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><input type="checkbox" class="js-res-select" data-id="${r.id}" data-group="${escapeHtml(batchGroupKey(r))}" /></td>
+            <td class="mono">${r.orderNumber}</td>
+            <td>${r.customerName}</td>
+            <td>${r.address}</td>
+            <td>${r.startDate}</td>
+            <td>${r.startTime}</td>
+            <td>${r.endDate}</td>
+            <td>${r.endTime}</td>
+            <td>${r.type}</td>
+            <td>${r.quantity}</td>
+            <td>${assignedUnitsText(r)}</td>
+            <td>
+              <div class="actions">
+                <button class="btn secondary small js-swap" data-id="${r.id}" type="button">Swap Unit</button>
+              </div>
+            </td>
+          `;
+
+          tr.querySelector(".js-swap").addEventListener("click", () => swapOne(r.id));
+
+          const checkbox = tr.querySelector(".js-res-select");
+          checkbox.addEventListener("change", () => {
+            const group = checkbox.dataset.group;
+            const checked = checkbox.checked;
+            document.querySelectorAll(".js-res-select").forEach((el) => {
+              if (el.dataset.group === group) el.checked = checked;
+            });
+          });
+
+          body.appendChild(tr);
+        }
+      }
+
+      async function loadData() {
+        const [assetsData, inventoryData, reservationData] = await Promise.all([
+          api("/api/assets"),
+          api("/api/inventory"),
+          api("/api/reservations"),
+        ]);
+        assets = assetsData || [];
+        inventoryRows = inventoryData || [];
+        reservations = (reservationData && reservationData.reservations) || [];
+        renderTypeOptions();
+        renderReservations();
+      }
+
+      function selectedReservationIds() {
+        return Array.from(document.querySelectorAll(".js-res-select:checked")).map((el) => el.dataset.id);
+      }
+
+      function reservationById(id) {
+        return reservations.find((r) => r.id === id);
+      }
+
+      function missingGroupSelections(ids) {
+        const selectedEntries = ids.map((id) => reservationById(id)).filter(Boolean);
+        const selectedIdSet = new Set(selectedEntries.map((r) => r.id));
+        const groupMap = new Map();
+
+        for (const entry of reservations) {
+          const key = batchGroupKey(entry);
+          if (!groupMap.has(key)) groupMap.set(key, []);
+          groupMap.get(key).push(entry);
+        }
+
+        const missing = [];
+        for (const entry of selectedEntries) {
+          const key = batchGroupKey(entry);
+          const inGroup = groupMap.get(key) || [];
+          const notSelected = inGroup.filter((r) => !selectedIdSet.has(r.id));
+          if (notSelected.length > 0 && !missing.includes(key)) {
+            missing.push(key);
+          }
+        }
+        return missing;
+      }
+
+      async function createReservation() {
+        try {
+          setMsg("");
+          const payload = {
+            customerName: $("res-customer").value.trim(),
+            address: $("res-address").value.trim(),
+            startDate: $("res-start-date").value,
+            startTime: $("res-start-time").value,
+            endDate: $("res-end-date").value,
+            endTime: $("res-end-time").value,
+            type: $("res-type").value,
+            quantity: Number($("res-qty").value || 0),
+          };
+
+          const startAt = parseLocalDateTime(payload.startDate, payload.startTime);
+          const endAt = parseLocalDateTime(payload.endDate, payload.endTime);
+          if (startAt && endAt && endAt < startAt) {
+            const msg = "End Date/Time cannot be earlier than Start Date/Time.";
+            setMsg(msg);
+            window.alert(msg);
+            return;
+          }
+
+          const created = await api("/api/reservations", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          setMsg(`Reservation ${created.orderNumber} created and unit(s) reserved.`, true);
+          await loadData();
+        } catch (err) {
+          setMsg(String(err.message || err));
+        }
+      }
+
+      async function swapOne(id) {
+        const entry = reservationById(id);
+        if (!entry) return;
+        const assigned = entry.assignedUnits || [];
+        if (assigned.length === 0) {
+          setMsg("This reservation has no assigned units to swap.");
+          return;
+        }
+
+        const removeNumber = await openPromptModal({
+          title: "Swap Unit",
+          text: "Type assigned unit number to replace.",
+          subtext: assigned.map((u) => `${u.unitNumber} (${u.type})`).join(", "),
+          label: "Assigned Unit Number",
+          initialValue: assigned[0].unitNumber,
+          confirmLabel: "Confirm",
+          cancelLabel: "Cancel",
+        });
+        if (!removeNumber) return;
+        const removeUnit = assigned.find((u) => String(u.unitNumber).toLowerCase() === String(removeNumber).trim().toLowerCase());
+        if (!removeUnit) {
+          setMsg("Assigned unit not found for this reservation.");
+          return;
+        }
+
+        const available = inventoryRows.filter((r) => String(r.status || "").trim().toLowerCase() === "available" && r.id !== removeUnit.unitId);
+        if (available.length === 0) {
+          setMsg("No Available units to swap into this reservation.");
+          return;
+        }
+        const availableLabel = available.map((r) => `${r.unitNumber} (${r.asset?.type || "-"})`).join(", ");
+        const addNumber = await openPromptModal({
+          title: "Swap Unit",
+          text: "Type Available unit number to assign.",
+          subtext: availableLabel,
+          label: "Replacement Unit Number",
+          initialValue: "",
+          confirmLabel: "Confirm",
+          cancelLabel: "Cancel",
+        });
+        if (!addNumber) return;
+        const addUnit = available.find((r) => String(r.unitNumber).toLowerCase() === String(addNumber).trim().toLowerCase());
+        if (!addUnit) {
+          setMsg("Available unit not found.");
+          return;
+        }
+
+        try {
+          await api(`/api/reservations/${id}/swap-unit`, {
+            method: "POST",
+            body: JSON.stringify({
+              removeUnitId: removeUnit.unitId,
+              addUnitId: addUnit.id,
+            }),
+          });
+          setMsg(`Swapped ${removeUnit.unitNumber} -> ${addUnit.unitNumber}.`, true);
+          await loadData();
+        } catch (err) {
+          setMsg(String(err.message || err));
+        }
+      }
+
+      async function runBatch(action) {
+        const ids = selectedReservationIds();
+        if (ids.length === 0) {
+          setMsg("Select one or more reservation entries first.");
+          return;
+        }
+        if (action === "activate" || action === "potential") {
+          const missing = missingGroupSelections(ids);
+          if (missing.length > 0) {
+            const actionName = action === "activate" ? "Activate Selected" : "Convert to Potential";
+            setMsg(`${actionName} requires selecting all entries with the same customer and start/end date+time.`);
+            return;
+          }
+        }
+        if (action === "activate") {
+          const entries = ids.map((id) => reservationById(id)).filter(Boolean);
+          const summary = entries.map((r) => `${r.customerName} -> ${assignedUnitNumbers(r)}`).join("\n");
+          const confirmed = await openConfirmModal({
+            title: "Confirm Batch Activation",
+            text: `Confirm placing selected entries On Rent?\n\n${summary}`,
+            confirmLabel: "Yes",
+            cancelLabel: "No",
+          });
+          if (!confirmed) return;
+        }
+        for (const id of ids) {
+          if (action === "activate") await api(`/api/reservations/${id}/activate`, { method: "POST" });
+          if (action === "cancel") await api(`/api/reservations/${id}/cancel`, { method: "POST" });
+          if (action === "potential") await api(`/api/reservations/${id}/potential`, { method: "POST" });
+        }
+        await loadData();
+      }
+
+      function cancelReservationEntry() {
+        $("res-customer").value = "";
+        $("res-address").value = "";
+        $("res-start-date").value = "";
+        $("res-start-time").value = "";
+        $("res-end-date").value = "";
+        $("res-end-time").value = "";
+        $("res-type").value = "";
+        $("res-qty").value = "1";
+        setMsg("");
+      }
+
+      $("confirm-modal-cancel").addEventListener("click", () => closeConfirmModal(false));
+      $("confirm-modal-confirm").addEventListener("click", () => closeConfirmModal(true));
+      $("prompt-modal-cancel").addEventListener("click", () => closePromptModal(null));
+      $("prompt-modal-confirm").addEventListener("click", () => closePromptModal($("prompt-modal-input").value));
+      $("prompt-modal-input").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          closePromptModal($("prompt-modal-input").value);
+        }
+      });
+
+      $("res-create").addEventListener("click", createReservation);
+      $("res-cancel").addEventListener("click", cancelReservationEntry);
+      $("batch-activate").addEventListener("click", () => runBatch("activate").catch((e) => setMsg(String(e.message || e))));
+      $("batch-cancel").addEventListener("click", () => runBatch("cancel").catch((e) => setMsg(String(e.message || e))));
+      $("batch-potential").addEventListener("click", () => runBatch("potential").catch((e) => setMsg(String(e.message || e))));
+
+      populateTimeSelect("res-start-time");
+      populateTimeSelect("res-end-time");
+      populateQuantitySelect();
+      wireDatePicker("res-start-date");
+      wireDatePicker("res-end-date");
+
+      loadData().catch((e) => setMsg("Failed to load reservations: " + String(e.message || e)));
+    </script>
+  </body>
+</html>
+
+
+

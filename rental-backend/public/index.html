@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inventory</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      main { max-width:1100px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+      .card h2 { margin:0 0 12px; font-size:15px; }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 12px; border-bottom:1px solid var(--border); }
+      tbody td { padding:10px 12px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; }
+      tbody tr:last-child td { border-bottom:0; }
+      .empty { color:var(--muted); font-size:13px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link.disabled { opacity:.55; pointer-events:none; }
+      .nav-link-admin { margin-left:auto; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Inventory</h1>
+      <div class="sub">View-only inventory to preserve unit data integrity. All edits are in Admin.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link active" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>Inventory</h2>
+        <div id="inventory-empty" class="empty" style="display:none;">No units found.</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:160px;">Unit Number</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th style="width:130px;">Hours</th>
+              <th style="width:160px;">Status</th>
+              <th style="width:190px;">Last Rented</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-body"></tbody>
+        </table>
+        <div id="inventory-error" class="msg" style="display:none;"></div>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const inventoryBody = $("inventory-body");
+      const inventoryEmpty = $("inventory-empty");
+      const inventoryError = $("inventory-error");
+
+      let lastRentedByUnit = {};
+
+      function setMsg(el, msg) {
+        el.style.display = msg ? "block" : "none";
+        el.textContent = msg || "";
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) {
+          throw new Error(data && data.error ? data.error : "Request failed");
+        }
+        return data;
+      }
+
+      function formatLastRented(unitId) {
+        const value = lastRentedByUnit[unitId];
+        if (!value) return "Never";
+        const dt = new Date(value);
+        if (Number.isNaN(dt.getTime())) return "Never";
+        return dt.toLocaleString();
+      }
+
+      function formatHours(value) {
+        if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+        return Number.isInteger(value) ? String(value) : value.toFixed(1);
+      }
+
+      function renderInventory(rows) {
+        inventoryBody.innerHTML = "";
+        if (!rows || rows.length === 0) {
+          inventoryEmpty.style.display = "block";
+          return;
+        }
+        inventoryEmpty.style.display = "none";
+
+        const unitCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const sortedRows = [...rows].sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+
+        for (const r of sortedRows) {
+          const tr = document.createElement("tr");
+          const asset = r.asset;
+          tr.innerHTML = `
+            <td>${r.unitNumber ?? "-"}</td>
+            <td>${asset?.type ?? "-"}</td>
+            <td>${asset?.description ?? "-"}</td>
+            <td>${formatHours(r.hours)}</td>
+            <td>${r.status ?? "-"}</td>
+            <td>${formatLastRented(r.id)}</td>
+          `;
+          inventoryBody.appendChild(tr);
+        }
+      }
+
+      async function loadInventory() {
+        setMsg(inventoryError, "");
+        const [rows, reservationSnapshot] = await Promise.all([
+          api("/api/inventory"),
+          api("/api/reservations"),
+        ]);
+        lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
+        renderInventory(rows);
+      }
+
+      loadInventory().catch((e) => setMsg(inventoryError, "Failed to load inventory: " + String(e.message || e)));
+    </script>
+  </body>
+</html>
+

@@ -1,0 +1,30 @@
+{
+  "name": "rental-backend",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

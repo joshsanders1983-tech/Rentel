@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link.disabled { opacity:.55; pointer-events:none; }
+      .nav-link-admin { margin-left:auto; }
+      main { max-width:1100px; margin:0 auto; padding:20px; }
+      .grid { display:grid; gap:12px; grid-template-columns:repeat(3,minmax(160px,1fr)); }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+      .label { font-size:12px; color:var(--muted); }
+      .value { margin-top:6px; font-size:28px; font-weight:700; }
+      .list { margin:0; padding-left:18px; color:var(--muted); font-size:14px; line-height:1.45; }
+      .row { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
+      .btn { display:inline-flex; align-items:center; text-decoration:none; background:var(--accent); color:#fff; border-radius:8px; padding:10px 14px; font-weight:600; font-size:14px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+      .section-head h2 { margin:0; font-size:15px; }
+      .filter-select { width:auto; min-width:170px; padding:8px 10px; font-size:13px; }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody tr:last-child td { border-bottom:0; }
+      .empty { color:var(--muted); font-size:13px; }
+      @media (max-width: 900px) { .grid { grid-template-columns:repeat(2,minmax(160px,1fr)); } }
+      @media (max-width: 560px) { .grid { grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Dashboard</h1>
+      <div class="sub">This is the app home. Use the navigation row to move across modules as we build.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link active" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="grid">
+        <div class="card">
+          <div class="label">Available Units</div>
+          <div class="value" id="metric-available">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Returned Units</div>
+          <div class="value" id="metric-returned">-</div>
+        </div>
+        <div class="card">
+          <div class="label">Down Units</div>
+          <div class="value" id="metric-down">-</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="row">
+          <a class="btn" href="/reservations">Start a Reservation</a>
+        </div>
+        <div id="load-error" class="msg" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h2>Upcoming Deliveries</h2>
+          <select id="dash-deliveries-filter" class="filter-select" aria-label="Filter upcoming deliveries">
+            <option value="today">Today</option>
+            <option value="next7">Next 7 days</option>
+            <option value="thisMonth">This Month</option>
+            <option value="nextMonth">Next Month</option>
+          </select>
+        </div>
+        <div class="empty" id="dash-deliveries-empty" style="display:none;">No upcoming deliveries.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Unit Number(s)</th>
+              <th>Type(s)</th>
+              <th>Start Date/Time</th>
+            </tr>
+          </thead>
+          <tbody id="dash-deliveries-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h2>Upcoming Pickups</h2>
+          <select id="dash-pickups-filter" class="filter-select" aria-label="Filter upcoming pickups">
+            <option value="today">Today</option>
+            <option value="next7">Next 7 days</option>
+            <option value="thisMonth">This Month</option>
+            <option value="nextMonth">Next Month</option>
+          </select>
+        </div>
+        <div class="empty" id="dash-pickups-empty" style="display:none;">No upcoming pickups.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Unit Number(s)</th>
+              <th>Type(s)</th>
+              <th>End Date/Time</th>
+            </tr>
+          </thead>
+          <tbody id="dash-pickups-body"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let latestReservationsSnapshot = { reservations: [], onRent: [] };
+
+      function setMetric(id, value) {
+        $(id).textContent = String(value);
+      }
+
+      function setError(msg) {
+        const el = $("load-error");
+        el.style.display = msg ? "block" : "none";
+        el.textContent = msg || "";
+      }
+
+      async function api(path) {
+        const res = await fetch(path, { headers: { "Content-Type": "application/json" } });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error((data && data.error) || "Request failed");
+        return data;
+      }
+
+      function assignedUnitNumbers(entry) {
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
+        return entry.assignedUnits.map((u) => u.unitNumber).join(", ");
+      }
+
+      function assignedTypes(entry) {
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
+        return Array.from(new Set(entry.assignedUnits.map((u) => u.type))).join(", ");
+      }
+
+      function scheduleTimestamp(dateText, timeText) {
+        if (!dateText || !timeText) return Number.MAX_SAFE_INTEGER;
+        const dt = new Date(`${dateText}T${timeText}:00`);
+        return Number.isNaN(dt.getTime()) ? Number.MAX_SAFE_INTEGER : dt.getTime();
+      }
+
+      function formatDateTime(dateText, timeText) {
+        const datePart = String(dateText || "").trim();
+        const timePart = String(timeText || "").trim();
+        if (!datePart && !timePart) return "-";
+        return `${datePart} ${timePart}`.trim();
+      }
+
+      function parseScheduleDate(dateText, timeText) {
+        if (!dateText || !timeText) return null;
+        const dt = new Date(`${dateText}T${timeText}:00`);
+        return Number.isNaN(dt.getTime()) ? null : dt;
+      }
+
+      function getFilterWindow(filterKey) {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const startOfMonthAfterNext = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+        const startIn8Days = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 8);
+
+        if (filterKey === "today") return { start: startOfToday, end: startOfTomorrow };
+        if (filterKey === "thisMonth") return { start: startOfThisMonth, end: startOfNextMonth };
+        if (filterKey === "nextMonth") return { start: startOfNextMonth, end: startOfMonthAfterNext };
+        return { start: startOfTomorrow, end: startIn8Days };
+      }
+
+      function matchesFilter(entry, options) {
+        const schedule = parseScheduleDate(entry[options.dateField], entry[options.timeField]);
+        if (!schedule) return false;
+        const filterKey = $(options.filterId).value;
+        const window = getFilterWindow(filterKey);
+        return schedule >= window.start && schedule < window.end;
+      }
+
+      function renderReservationTableRows(entries, options) {
+        const body = $(options.bodyId);
+        const empty = $(options.emptyId);
+        body.innerHTML = "";
+
+        const filteredEntries = entries
+          .filter((entry) => matchesFilter(entry, options))
+          .sort(
+          (a, b) =>
+            scheduleTimestamp(a[options.dateField], a[options.timeField]) -
+            scheduleTimestamp(b[options.dateField], b[options.timeField]),
+        );
+
+        if (filteredEntries.length === 0) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        for (const e of filteredEntries) {
+          const tr = document.createElement("tr");
+          const scheduledAt = formatDateTime(e[options.dateField], e[options.timeField]);
+          tr.innerHTML = `
+            <td>${e.customerName}</td>
+            <td>${e.address}</td>
+            <td>${assignedUnitNumbers(e)}</td>
+            <td>${assignedTypes(e)}</td>
+            <td>${scheduledAt}</td>
+          `;
+          body.appendChild(tr);
+        }
+      }
+
+      function renderReservationRows(reservationsSnapshot) {
+        const reservations = (reservationsSnapshot && reservationsSnapshot.reservations) || [];
+        const onRent = (reservationsSnapshot && reservationsSnapshot.onRent) || [];
+
+        renderReservationTableRows(reservations, {
+          bodyId: "dash-deliveries-body",
+          emptyId: "dash-deliveries-empty",
+          dateField: "startDate",
+          timeField: "startTime",
+          filterId: "dash-deliveries-filter",
+        });
+        renderReservationTableRows(onRent, {
+          bodyId: "dash-pickups-body",
+          emptyId: "dash-pickups-empty",
+          dateField: "endDate",
+          timeField: "endTime",
+          filterId: "dash-pickups-filter",
+        });
+      }
+
+      function initFilters() {
+        $("dash-deliveries-filter").value = "next7";
+        $("dash-pickups-filter").value = "next7";
+        $("dash-deliveries-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
+        $("dash-pickups-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
+      }
+
+      async function loadDashboard() {
+        try {
+          setError("");
+          const [inventory, reservationsSnapshot] = await Promise.all([
+            api("/api/inventory"),
+            api("/api/reservations"),
+          ]);
+          const statusText = (row) => String(row.status || "").trim().toUpperCase();
+          const available = inventory.filter((r) => statusText(r) === "AVAILABLE").length;
+          const returned = inventory.filter((r) => statusText(r).startsWith("RETURN")).length;
+          const down = inventory.filter((r) => statusText(r).startsWith("DOWN")).length;
+
+          setMetric("metric-available", available);
+          setMetric("metric-returned", returned);
+          setMetric("metric-down", down);
+          latestReservationsSnapshot = {
+            reservations: (reservationsSnapshot && reservationsSnapshot.reservations) || [],
+            onRent: (reservationsSnapshot && reservationsSnapshot.onRent) || [],
+          };
+          renderReservationRows(reservationsSnapshot);
+        } catch (err) {
+          setError("Failed to load dashboard data: " + String(err.message || err));
+          setMetric("metric-available", "-");
+          setMetric("metric-returned", "-");
+          setMetric("metric-down", "-");
+          latestReservationsSnapshot = { reservations: [], onRent: [] };
+          renderReservationRows(latestReservationsSnapshot);
+        }
+      }
+
+      initFilters();
+      loadDashboard();
+    </script>
+  </body>
+</html>
+
+

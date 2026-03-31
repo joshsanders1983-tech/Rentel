@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>On Rent</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; --ok:#76d59b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link.disabled { opacity:.55; pointer-events:none; }
+      .nav-link-admin { margin-left:auto; }
+      main { max-width:1250px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+      .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+      .btn { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      .btn.secondary { background:#3a4a5e; }
+      .btn.danger { background:#b24242; }
+      .btn:disabled { cursor:not-allowed; opacity:.6; }
+      .small { padding:6px 10px; font-size:12px; border-radius:7px; }
+      .actions { display:flex; flex-wrap:wrap; gap:6px; }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:10px; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody tr:last-child td { border-bottom:0; }
+      .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+      .empty { color:var(--muted); font-size:13px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .msg.ok { color:var(--ok); }
+      .modal-backdrop { position:fixed; inset:0; background:rgba(6,9,13,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+      .modal { width:100%; max-width:560px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+      .modal h3 { margin:0; font-size:16px; }
+      .modal p { margin:10px 0 0; color:var(--text); line-height:1.45; }
+      .modal .subtext { color:var(--muted); font-size:12px; margin-top:8px; }
+      .modal-grid { display:grid; gap:10px; margin-top:12px; }
+      .modal label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+      .modal input, .modal textarea { width:100%; border:1px solid var(--border); border-radius:8px; background:#0d1117; color:var(--text); padding:10px; outline:none; }
+      .modal textarea { min-height:92px; resize:vertical; }
+      .modal-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin-top:14px; }
+      @media (max-width: 900px) {
+        main { padding:12px; }
+        .card { padding:10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>On Rent</h1>
+      <div class="sub">Active rentals that have been placed On Rent from Reservations. Each unit appears on its own row.</div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link active" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0;font-size:15px;">On Rent List</h2>
+          <button class="btn" id="refresh-onrent" type="button">Refresh</button>
+        </div>
+        <div class="empty" id="onrent-empty" style="display:none;margin-top:8px;">No active On Rent entries yet.</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:38px;"></th>
+              <th>Added On Rent At</th>
+              <th>Order Number</th>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Type</th>
+              <th>Unit Number</th>
+              <th style="width:200px;">Options</th>
+            </tr>
+          </thead>
+          <tbody id="onrent-body"></tbody>
+        </table>
+        <div id="onrent-msg" class="msg" style="display:none;"></div>
+      </div>
+    </main>
+
+    <div class="modal-backdrop" id="endnow-modal" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="endnow-title">
+        <h3 id="endnow-title">Confirm Return</h3>
+        <p id="endnow-question"></p>
+        <div class="modal-actions">
+          <button class="btn secondary" id="endnow-no" type="button">No</button>
+          <button class="btn danger" id="endnow-yes" type="button">Yes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="swap-modal" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="swap-title">
+        <h3 id="swap-title">Swap Unit</h3>
+        <p id="swap-current-unit" class="subtext"></p>
+        <div class="modal-grid">
+          <div>
+            <label for="swap-new-unit">New Unit Number</label>
+            <input id="swap-new-unit" autocomplete="off" />
+          </div>
+          <div>
+            <label for="swap-reason">Reason for Swap</label>
+            <textarea id="swap-reason"></textarea>
+          </div>
+        </div>
+        <div id="swap-modal-msg" class="msg" style="display:none;"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" id="swap-cancel" type="button">Cancel</button>
+          <button class="btn" id="swap-confirm" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      let onRentEntries = [];
+      let pendingEndNowId = "";
+      let pendingSwap = null;
+
+      function setMsg(message, ok = false) {
+        const el = $("onrent-msg");
+        el.style.display = message ? "block" : "none";
+        el.className = ok ? "msg ok" : "msg";
+        el.textContent = message || "";
+      }
+
+      function setSwapModalMsg(message) {
+        const el = $("swap-modal-msg");
+        el.style.display = message ? "block" : "none";
+        el.textContent = message || "";
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function normalizeBatchText(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function onRentBatchKey(entry) {
+        return [
+          normalizeBatchText(entry.customerName),
+          normalizeBatchText(entry.startDate),
+          normalizeBatchText(entry.startTime),
+        ].join("|");
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error((data && data.error) || "Request failed");
+        return data;
+      }
+
+      function assignedUnits(entry) {
+        return Array.isArray(entry.assignedUnits) ? entry.assignedUnits : [];
+      }
+
+      function toDisplayRows(entries) {
+        const rows = [];
+        for (const entry of entries || []) {
+          const units = assignedUnits(entry);
+          if (units.length === 0) {
+            rows.push({ entry, unit: null });
+            continue;
+          }
+          for (const unit of units) {
+            rows.push({ entry, unit });
+          }
+        }
+        return rows;
+      }
+
+      function batchEntriesFor(entryId) {
+        const target = onRentEntries.find((entry) => entry.id === entryId);
+        if (!target) return [];
+        const batchKey = onRentBatchKey(target);
+        return onRentEntries.filter((entry) => onRentBatchKey(entry) === batchKey);
+      }
+
+      function buildBatchSummary(entries) {
+        const customerNames = Array.from(new Set(entries.map((entry) => entry.customerName).filter(Boolean)));
+        const units = entries.flatMap((entry) => assignedUnits(entry));
+        const unitNumbers = units.map((unit) => unit.unitNumber).filter(Boolean);
+        return {
+          customers: customerNames.join(", ") || "-",
+          unitNumbers: unitNumbers.join(", ") || "-",
+        };
+      }
+
+      function openEndNowModal(entryId) {
+        const entries = batchEntriesFor(entryId);
+        if (entries.length === 0) return;
+        pendingEndNowId = entryId;
+        const summary = buildBatchSummary(entries);
+        $("endnow-question").textContent = `Confirm return of ${summary.customers}, ${summary.unitNumbers}?`;
+        $("endnow-modal").style.display = "flex";
+        $("endnow-modal").setAttribute("aria-hidden", "false");
+      }
+
+      function closeEndNowModal() {
+        pendingEndNowId = "";
+        $("endnow-modal").style.display = "none";
+        $("endnow-modal").setAttribute("aria-hidden", "true");
+      }
+
+      function openSwapModal(entryId, removeUnitId, removeUnitNumber) {
+        pendingSwap = { entryId, removeUnitId, removeUnitNumber };
+        $("swap-current-unit").textContent = `Current unit: ${removeUnitNumber}`;
+        $("swap-new-unit").value = "";
+        $("swap-reason").value = "";
+        setSwapModalMsg("");
+        $("swap-modal").style.display = "flex";
+        $("swap-modal").setAttribute("aria-hidden", "false");
+        $("swap-new-unit").focus();
+      }
+
+      function closeSwapModal() {
+        pendingSwap = null;
+        setSwapModalMsg("");
+        $("swap-modal").style.display = "none";
+        $("swap-modal").setAttribute("aria-hidden", "true");
+      }
+
+      function renderOnRent(onRent) {
+        const body = $("onrent-body");
+        const empty = $("onrent-empty");
+        body.innerHTML = "";
+        if (!onRent || onRent.length === 0) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+
+        for (const row of toDisplayRows(onRent)) {
+          const entry = row.entry;
+          const unit = row.unit;
+          const batchKey = onRentBatchKey(entry);
+          const unitType = unit ? unit.type : "-";
+          const unitNumber = unit ? unit.unitNumber : "-";
+          const unitId = unit ? unit.unitId : "";
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><input type="checkbox" class="js-onrent-select" data-batch="${escapeHtml(batchKey)}" /></td>
+            <td>${entry.activatedAt ? new Date(entry.activatedAt).toLocaleString() : "-"}</td>
+            <td class="mono">${escapeHtml(entry.orderNumber)}</td>
+            <td>${escapeHtml(entry.customerName)}</td>
+            <td>${escapeHtml(entry.address)}</td>
+            <td>${escapeHtml(entry.startDate)} ${escapeHtml(entry.startTime)}</td>
+            <td>${escapeHtml(entry.endDate)} ${escapeHtml(entry.endTime)}</td>
+            <td>${escapeHtml(unitType)}</td>
+            <td>${escapeHtml(unitNumber)}</td>
+            <td>
+              <div class="actions">
+                <button class="btn danger small js-end-now" type="button">End Now</button>
+                <button class="btn secondary small js-swap" type="button" data-unit-id="${escapeHtml(unitId)}" data-unit-number="${escapeHtml(unitNumber)}" ${unit ? "" : "disabled"}>Swap Unit</button>
+              </div>
+            </td>
+          `;
+
+          const checkbox = tr.querySelector(".js-onrent-select");
+          checkbox.addEventListener("change", () => {
+            const checked = checkbox.checked;
+            const group = checkbox.dataset.batch;
+            document.querySelectorAll(".js-onrent-select").forEach((el) => {
+              if (el.dataset.batch === group) el.checked = checked;
+            });
+          });
+
+          tr.querySelector(".js-end-now").addEventListener("click", () => openEndNowModal(entry.id));
+          tr.querySelector(".js-swap").addEventListener("click", () => {
+            if (!unit) return;
+            openSwapModal(entry.id, unit.unitId, unit.unitNumber);
+          });
+
+          body.appendChild(tr);
+        }
+      }
+
+      async function loadOnRent() {
+        try {
+          setMsg("");
+          const snapshot = await api("/api/reservations");
+          onRentEntries = (snapshot && snapshot.onRent) || [];
+          renderOnRent(onRentEntries);
+        } catch (err) {
+          setMsg("Failed to load On Rent data: " + String(err.message || err));
+          onRentEntries = [];
+          renderOnRent([]);
+        }
+      }
+
+      $("endnow-no").addEventListener("click", closeEndNowModal);
+      $("endnow-yes").addEventListener("click", async () => {
+        if (!pendingEndNowId) return;
+        try {
+          const result = await api(`/api/reservations/on-rent/${encodeURIComponent(pendingEndNowId)}/end-now`, {
+            method: "POST",
+          });
+          closeEndNowModal();
+          await loadOnRent();
+          const endedEntries = Number(result && result.endedEntries ? result.endedEntries : 0);
+          const returnedUnits = Number(result && result.returnedUnits ? result.returnedUnits : 0);
+          setMsg(
+            `Returned ${returnedUnits} unit(s) from ${endedEntries} On Rent entr${endedEntries === 1 ? "y" : "ies"}.`,
+            true,
+          );
+        } catch (err) {
+          closeEndNowModal();
+          setMsg(String(err.message || err));
+        }
+      });
+
+      $("swap-cancel").addEventListener("click", closeSwapModal);
+      $("swap-confirm").addEventListener("click", async () => {
+        if (!pendingSwap) return;
+
+        const addUnitNumber = $("swap-new-unit").value.trim();
+        const reason = $("swap-reason").value.trim();
+
+        if (!addUnitNumber) {
+          setSwapModalMsg("New unit number is required.");
+          return;
+        }
+        if (!reason) {
+          setSwapModalMsg("Reason for swapping is required.");
+          return;
+        }
+
+        try {
+          const result = await api(`/api/reservations/on-rent/${encodeURIComponent(pendingSwap.entryId)}/swap-unit`, {
+            method: "POST",
+            body: JSON.stringify({
+              removeUnitId: pendingSwap.removeUnitId,
+              addUnitNumber,
+              reason,
+            }),
+          });
+
+          closeSwapModal();
+          await loadOnRent();
+
+          const swapped = result && result.swapped ? result.swapped : null;
+          if (swapped) {
+            setMsg(`Swapped ${swapped.fromUnitNumber} -> ${swapped.toUnitNumber}.`, true);
+          } else {
+            setMsg("Unit swap complete.", true);
+          }
+        } catch (err) {
+          setSwapModalMsg(String(err.message || err));
+        }
+      });
+
+      $("refresh-onrent").addEventListener("click", () => loadOnRent());
+      loadOnRent();
+    </script>
+  </body>
+</html>
+

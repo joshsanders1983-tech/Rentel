@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tech Login</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+      .card { width:100%; max-width:420px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; }
+      h1 { margin:0; font-size:19px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      label { display:block; font-size:12px; color:var(--muted); margin:12px 0 6px; }
+      input { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:#0d1117; color:var(--text); outline:none; }
+      .row { margin-top:12px; display:flex; gap:8px; align-items:center; }
+      button { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .link { margin-top:12px; font-size:12px; }
+      .link a { color:var(--text); }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Tech Login</h1>
+      <div class="sub">Sign in to access the Techs workflow.</div>
+      <label for="tech-username">Username</label>
+      <input id="tech-username" type="text" autocomplete="username" />
+      <label for="tech-password">Password</label>
+      <input id="tech-password" type="password" autocomplete="current-password" />
+      <div class="row">
+        <button id="tech-login" type="button">Sign In</button>
+      </div>
+      <div id="tech-auth-error" class="msg" style="display:none;"></div>
+      <div class="link"><a href="/dashboard">Back to Dashboard</a></div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const usernameInput = $("tech-username");
+      const passwordInput = $("tech-password");
+      const loginBtn = $("tech-login");
+      const authError = $("tech-auth-error");
+
+      function setMsg(el, msg) {
+        el.style.display = msg ? "block" : "none";
+        el.textContent = msg || "";
+      }
+
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) {
+          throw new Error(data && data.error ? data.error : "Request failed");
+        }
+        return data;
+      }
+
+      async function bootstrap() {
+        setMsg(authError, "");
+        const session = await api("/api/tech-auth/session");
+        if (session.authenticated) {
+          window.location.replace("/techs");
+          return;
+        }
+        usernameInput.focus();
+      }
+
+      async function login() {
+        setMsg(authError, "");
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+        if (!username || !password) {
+          setMsg(authError, "Username and password are required.");
+          return;
+        }
+        loginBtn.disabled = true;
+        const originalText = loginBtn.textContent;
+        loginBtn.textContent = "Signing In...";
+        try {
+          await api("/api/tech-auth/login", {
+            method: "POST",
+            body: JSON.stringify({ username, password }),
+          });
+          passwordInput.value = "";
+          window.location.replace("/techs");
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = originalText;
+        }
+      }
+
+      loginBtn.addEventListener("click", () => {
+        login().catch((e) => setMsg(authError, String(e.message || e)));
+      });
+
+      usernameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loginBtn.click();
+        }
+      });
+
+      passwordInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loginBtn.click();
+        }
+      });
+
+      bootstrap().catch((e) =>
+        setMsg(authError, "Failed to initialize tech login: " + String(e.message || e)),
+      );
+    </script>
+  </body>
+</html>

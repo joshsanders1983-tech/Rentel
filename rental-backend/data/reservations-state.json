@@ -1,0 +1,13 @@
+{
+  "orderCounter": 8,
+  "reservations": [],
+  "onRent": [],
+  "returnedOnRent": [],
+  "potentials": [],
+  "lastRentedByUnit": {
+    "cmndodzsl0004dueibbfpk94r": "2026-03-31T03:53:12.394Z",
+    "cmndo1ixe000efy8yd2no30tk": "2026-03-31T02:55:10.078Z",
+    "cmndo23ex000gfy8yak104h4f": "2026-03-31T03:09:46.047Z",
+    "cmndoraoi0006vkehrba04xc5": "2026-03-31T03:01:58.582Z"
+  }
+}
