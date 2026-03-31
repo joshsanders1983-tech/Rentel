@@ -34,6 +34,22 @@ The app source is in:
 6. Open:
    - [http://localhost:4000](http://localhost:4000)
 
+## Laptop Install + One-Click Desktop Icon (Windows)
+
+1. Clone this repo to your laptop (or download and extract it).
+2. Open PowerShell in the repo root (the folder containing this `README.md`).
+3. Run:
+   - `.\Create-Rentel-Desktop-Icon.ps1`
+4. Double-click the new `Rentel` icon on your desktop.
+
+What the icon does:
+
+- runs `Launch-Rentel.ps1`
+- installs dependencies on first run
+- applies database migrations
+- starts the server (if not already running)
+- opens the app in your browser at `http://localhost:4000`
+
 ## Default Access
 
 - Admin:
@@ -56,4 +72,3 @@ Run these in `rental-backend/`:
 - `npm start` - run compiled server from `dist/`
 - `npm run db:deploy` - apply migrations
 - `npm run db:studio` - open Prisma Studio
-
