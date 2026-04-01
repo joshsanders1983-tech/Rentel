@@ -18,11 +18,11 @@ function Invoke-Npm {
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$backendDir = Join-Path $repoRoot "rental-backend"
+$backendDir = $repoRoot
 $packageJsonPath = Join-Path $backendDir "package.json"
 
 if (-not (Test-Path $packageJsonPath)) {
-  Write-Host "Could not find rental-backend/package.json. Expected repo root at: $repoRoot" -ForegroundColor Red
+  Write-Host "Could not find package.json. Expected repo root at: $repoRoot" -ForegroundColor Red
   exit 1
 }
 

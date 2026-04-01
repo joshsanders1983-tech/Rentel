@@ -1,80 +1,35 @@
 {
-  "name": "rentel-desktop",
+  "name": "rentel",
   "version": "1.0.0",
-  "description": "Rentel desktop installer wrapper",
-  "main": "electron/main.js",
+  "description": "Rental operations API and web UI (Express + Prisma)",
+  "type": "module",
+  "main": "dist/server.js",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dev": "concurrently \"npm --prefix rental-backend run dev\" \"wait-on tcp:4000 && electron .\"",
-    "build:backend": "npm --prefix rental-backend run build",
-    "dist:win": "npm run build:backend && electron-builder --win nsis",
-    "publish:win": "npm run build:backend && electron-builder --win nsis --publish always",
-    "render-build": "npm install --prefix rental-backend && npm run build --prefix rental-backend && npm run db:deploy --prefix rental-backend",
-    "render-start": "npm start --prefix rental-backend"
+    "dev": "tsx watch src/server.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
+    "migrate:from-sqlite": "tsx scripts/migrate-from-sqlite.ts"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "electron": "^37.1.0",
-    "electron-builder": "^24.13.3",
-    "wait-on": "^8.0.3"
-  },
-  "build": {
-    "appId": "com.rentel.desktop",
-    "productName": "Rentel",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "electron/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "rental-backend/dist",
-        "to": "rental-backend/dist"
-      },
-      {
-        "from": "rental-backend/public",
-        "to": "rental-backend/public"
-      },
-      {
-        "from": "rental-backend/prisma",
-        "to": "rental-backend/prisma"
-      },
-      {
-        "from": "rental-backend/node_modules",
-        "to": "rental-backend/node_modules"
-      },
-      {
-        "from": "rental-backend/package.json",
-        "to": "rental-backend/package.json"
-      },
-      {
-        "from": "rental-backend/.env.example",
-        "to": "rental-backend/.env.example"
-      }
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "artifactName": "Rentel-Setup-${version}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Rentel"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "joshsanders1983-tech",
-      "repo": "Rentel"
-    }
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }

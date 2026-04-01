@@ -34,7 +34,7 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    service: "rental-backend",
+    service: "rentel",
     time: new Date().toISOString(),
     supabaseJs: isSupabaseJsConfigured() ? "configured" : "not_configured",
   });

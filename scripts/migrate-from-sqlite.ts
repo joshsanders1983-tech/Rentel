@@ -11,7 +11,7 @@ import { prisma } from "../src/lib/prisma.js";
 function assertPostgresUrl() {
   const u = process.env.DATABASE_URL ?? "";
   if (!u || u.startsWith("file:")) {
-    console.error("Set DATABASE_URL to your Supabase Postgres URI in rental-backend/.env");
+    console.error("Set DATABASE_URL to your Supabase Postgres URI in .env");
     process.exit(1);
   }
 }

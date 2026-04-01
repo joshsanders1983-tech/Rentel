@@ -1,14 +1,12 @@
-# Render Blueprint — builds the Express API in rental-backend/ from the repo root
-# (avoids deploying the Electron desktop app). Set DATABASE_URL + ADMIN_PASSWORD in the dashboard.
-#
-# Manual Web Service (no Blueprint): same build/start as below; leave "Root Directory" empty.
+# Render Web Service — Express app at repo root (no subfolder).
+# Set DATABASE_URL and ADMIN_PASSWORD in the dashboard.
 
 services:
   - type: web
     name: rentel-api
     runtime: node
-    buildCommand: npm run render-build
-    startCommand: npm run render-start
+    buildCommand: npm install && npm run build && npm run db:deploy
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production

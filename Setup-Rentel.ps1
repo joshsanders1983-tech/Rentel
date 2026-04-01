@@ -58,7 +58,7 @@ function Test-NeedsDatabaseUrl([string]$url) {
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$backend = Join-Path $repoRoot "rental-backend"
+$backend = $repoRoot
 $envExample = Join-Path $backend ".env.example"
 $envFile = Join-Path $backend ".env"
 
@@ -78,7 +78,7 @@ if (-not $node -or -not $npm) {
 
 if (-not (Test-Path $envFile)) {
   Copy-Item $envExample $envFile
-  Write-Host "Created rental-backend/.env from .env.example"
+  Write-Host "Created .env from .env.example"
 }
 
 $dbUrl = Get-EnvValue $envFile "DATABASE_URL"
@@ -107,7 +107,7 @@ if (Test-NeedsDatabaseUrl $dbUrl) {
   $paste = Read-Host "Paste the full connection string here"
   $paste = $paste.Trim().Trim('"')
   if ([string]::IsNullOrWhiteSpace($paste)) {
-    Write-Host "No URL entered. Set DATABASE_URL in rental-backend/.env and run this script again." -ForegroundColor Red
+    Write-Host "No URL entered. Set DATABASE_URL in .env and run this script again." -ForegroundColor Red
     exit 1
   }
   Set-EnvValue $envFile "DATABASE_URL" $paste
@@ -149,11 +149,10 @@ try {
   Write-Host "Setup finished successfully." -ForegroundColor Green
   Write-Host ""
   Write-Host "  Start the app: double-click Launch-Rentel-Dev.cmd"
-  Write-Host "  Or:  cd rental-backend"
-  Write-Host "        npm run dev"
+  Write-Host "  Or:  npm run dev"
   Write-Host "  Then open http://localhost:4000"
   Write-Host ""
-  Write-Host "  Give every teammate the same DATABASE_URL in their rental-backend/.env so data stays in sync."
+  Write-Host "  Give every teammate the same DATABASE_URL in their .env so data stays in sync."
   Write-Host ""
 } finally {
   Pop-Location

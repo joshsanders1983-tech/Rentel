@@ -20,7 +20,7 @@ export function isSupabaseJsConfigured(): boolean {
 export function getSupabaseClient(): SupabaseClient {
   if (!isSupabaseJsConfigured()) {
     throw new Error(
-      "Set SUPABASE_URL and SUPABASE_ANON_KEY in rental-backend/.env (Supabase → Project Settings → API).",
+      "Set SUPABASE_URL and SUPABASE_ANON_KEY in .env (Supabase → Project Settings → API).",
     );
   }
   if (!cached) {
