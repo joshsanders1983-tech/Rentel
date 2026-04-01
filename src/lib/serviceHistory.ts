@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 
-export type ServiceHistoryRow = {
+type ServiceHistoryRow = {
   id: string;
   inventoryId: string;
   details: string | null;

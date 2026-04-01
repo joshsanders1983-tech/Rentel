@@ -160,7 +160,7 @@ async function getTechnicianById(id: string): Promise<TechnicianAccount | null> 
   return rowToTechnicianAccount(row);
 }
 
-export type TechnicianAccount = {
+type TechnicianAccount = {
   id: string;
   techName: string;
   username: string;

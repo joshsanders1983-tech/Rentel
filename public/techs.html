@@ -1004,7 +1004,8 @@
             </td>
           `;
           tr.querySelector(".js-down-complete").addEventListener("click", () => {
-            submitDownComplete(row);
+            if (!row?.id) return;
+            openCompleteModal(row);
           });
           tr.querySelector(".js-history").addEventListener("click", () => {
             openRepairHistoryModal(row);
@@ -1131,11 +1132,6 @@
           completeSubmit.disabled = false;
           completeSubmit.textContent = originalText;
         }
-      }
-
-      function submitDownComplete(row) {
-        if (!row || !row.id) return;
-        openCompleteModal(row);
       }
 
       async function submitInspection() {

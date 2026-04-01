@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "./prisma.js";
 
-export type RepairHistoryAction = "DOWN" | "COMPLETE";
+type RepairHistoryAction = "DOWN" | "COMPLETE";
 
 type RepairHistoryRow = {
   id: string;
@@ -33,7 +33,7 @@ function isDuplicateColumnError(error: unknown): boolean {
   return message.toLowerCase().includes("duplicate column name");
 }
 
-export async function ensureRepairHistorySchema(): Promise<void> {
+async function ensureRepairHistorySchema(): Promise<void> {
   await run(`
     CREATE TABLE IF NOT EXISTS "RepairHistoryEntry" (
       "id" TEXT PRIMARY KEY,

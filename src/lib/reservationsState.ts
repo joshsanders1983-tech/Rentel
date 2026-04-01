@@ -4,13 +4,13 @@ import { join } from "node:path";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
-export type AssignedUnit = {
+type AssignedUnit = {
   unitId: string;
   unitNumber: string;
   type: string;
 };
 
-export type ReservationRecord = {
+type ReservationRecord = {
   id: string;
   orderNumber: string;
   customerName: string;
@@ -26,11 +26,11 @@ export type ReservationRecord = {
   createdAt: string;
 };
 
-export type OnRentRecord = ReservationRecord & {
+type OnRentRecord = ReservationRecord & {
   activatedAt: string;
 };
 
-export type ReturnedOnRentRecord = OnRentRecord & {
+type ReturnedOnRentRecord = OnRentRecord & {
   returnedAt: string;
 };
 

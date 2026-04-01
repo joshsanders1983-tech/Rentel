@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "./prisma.js";
 import { normalizeStatus } from "./statusFormat.js";
 
-export type MaintenanceTriggerType = "HOURS" | "RENTAL_COUNT";
-export type MaintenanceScopeType = "ALL_UNITS" | "ASSET_TYPES" | "SPECIFIC_UNITS";
-export type MaintenanceTaskStatus = "DUE" | "IN_PROGRESS" | "COMPLETED";
+type MaintenanceTriggerType = "HOURS" | "RENTAL_COUNT";
+type MaintenanceScopeType = "ALL_UNITS" | "ASSET_TYPES" | "SPECIFIC_UNITS";
+type MaintenanceTaskStatus = "DUE" | "IN_PROGRESS" | "COMPLETED";
 
 type InventoryRow = {
   id: string;
@@ -61,7 +61,7 @@ const STATUS_AVAILABLE = "Available";
 const STATUS_DOWN = "Down";
 const STATUS_ON_RENT = "On Rent";
 const STATUS_RESERVED = "Reserved";
-export const SERVICE_REASON_PREFIX = "Service Due:";
+const SERVICE_REASON_PREFIX = "Service Due:";
 
 function nowIso(): string {
   return new Date().toISOString();
