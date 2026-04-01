@@ -144,7 +144,6 @@
         <div class="hint" style="margin-top:10px;">Units are auto-assigned from Available inventory using least-recently-rented first.</div>
 
         <div class="row" style="margin-top:12px; justify-content:flex-end;">
-          <button class="btn warn" id="batch-potential" type="button">Convert Selected to Potential</button>
           <button class="btn danger" id="res-cancel" type="button">Cancel</button>
           <button class="btn" id="res-create" type="button">Create Reservation</button>
         </div>
@@ -156,6 +155,7 @@
           <h2 style="margin:0;">Upcoming Orders</h2>
           <div class="actions">
             <button class="btn small" id="batch-activate" type="button">Activate Selected</button>
+            <button class="btn warn small" id="batch-potential" type="button">Convert Selected to Potential</button>
             <button class="btn danger small" id="batch-cancel" type="button">Cancel Selected</button>
           </div>
         </div>
@@ -468,17 +468,17 @@
       }
 
       function assignedUnitsText(entry) {
-        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
         return entry.assignedUnits.map((u) => `${u.unitNumber} (${u.type})`).join(", ");
       }
 
       function assignedUnitNumbers(entry) {
-        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
         return entry.assignedUnits.map((u) => u.unitNumber).join(", ");
       }
 
       function assignedTypes(entry) {
-        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "â€”";
+        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
         const set = new Set(entry.assignedUnits.map((u) => u.type));
         return Array.from(set).join(", ");
       }
