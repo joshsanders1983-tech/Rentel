@@ -7,7 +7,7 @@ import {
   type InventoryServiceStateOptions,
 } from "../lib/maintenanceAutomation.js";
 import { prisma } from "../lib/prisma.js";
-import { invalidateInventoryCache } from "./inventory.js";
+import { invalidateInventoryCache } from "../lib/inventoryCache.js";
 import { appendRepairHistoryEntry } from "../lib/repairHistory.js";
 import { removeReturnedOnRentUnit } from "../lib/reservationsState.js";
 import { normalizeStatus } from "../lib/statusFormat.js";

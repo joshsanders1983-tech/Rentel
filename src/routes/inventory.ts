@@ -14,24 +14,16 @@ import {
   appendServiceHistoryEntry,
   getServiceHistoryEntries,
 } from "../lib/serviceHistory.js";
+import {
+  getInventoryCachePayloadIfFresh,
+  invalidateInventoryCache,
+  setInventoryCachePayload,
+} from "../lib/inventoryCache.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
 import { getTechSession, requireTech } from "../lib/techAuth.js";
 
 export const apiInventoryRouter = Router();
 const DEFAULT_NEW_UNIT_STATUS = "Available";
-const INVENTORY_CACHE_TTL_MS = 2000;
-
-let inventoryCache:
-  | {
-      expiresAt: number;
-      payload: unknown[];
-    }
-  | null = null;
-
-/** Clears the short-lived GET /api/inventory cache after mutations (also used by inspections). */
-export function invalidateInventoryCache() {
-  inventoryCache = null;
-}
 
 function upperText(value: unknown) {
   return String(value ?? "").trim().toUpperCase();
@@ -174,8 +166,9 @@ function formatCompleteRepairDetails(input: {
 }
 
 apiInventoryRouter.get("/", async (_req, res) => {
-  if (inventoryCache && inventoryCache.expiresAt > Date.now()) {
-    res.json(inventoryCache.payload);
+  const cached = getInventoryCachePayloadIfFresh();
+  if (cached) {
+    res.json(cached);
     return;
   }
   const rows = await prisma.inventory.findMany({
@@ -203,10 +196,7 @@ apiInventoryRouter.get("/", async (_req, res) => {
       (row as unknown as { downReason?: string | null }).downReason ??
       deriveDownReason(row),
   }));
-  inventoryCache = {
-    expiresAt: Date.now() + INVENTORY_CACHE_TTL_MS,
-    payload,
-  };
+  setInventoryCachePayload(payload);
   res.json(payload);
 });
 
