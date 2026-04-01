@@ -34,12 +34,17 @@ type ReturnedOnRentRecord = OnRentRecord & {
   returnedAt: string;
 };
 
+function jsonIdPart(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return String(value).trim();
+}
+
 function normalizeAssignedUnit(raw: unknown): AssignedUnit | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const fromUnitId = typeof o.unitId === "string" ? o.unitId.trim() : "";
-  const fromId = typeof o.id === "string" ? o.id.trim() : "";
-  const unitId = fromUnitId || fromId;
+  const unitId = jsonIdPart(o.unitId) || jsonIdPart(o.id);
   if (!unitId) return null;
   const unitNumber =
     typeof o.unitNumber === "string"

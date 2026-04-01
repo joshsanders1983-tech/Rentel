@@ -163,7 +163,14 @@
       async function api(path) {
         const res = await fetch(path, { headers: { "Content-Type": "application/json" } });
         const text = await res.text();
-        const data = text ? JSON.parse(text) : null;
+        let data = null;
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            throw new Error("Server returned invalid JSON (check network or proxy).");
+          }
+        }
         if (!res.ok) throw new Error((data && data.error) || "Request failed");
         return data;
       }
@@ -204,12 +211,14 @@
         const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
         const startOfMonthAfterNext = new Date(now.getFullYear(), now.getMonth() + 2, 1);
-        const startIn8Days = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 8);
+        // Inclusive of today: [startOfToday, start of today+7d) covers seven calendar days.
+        const endOfNext7Exclusive = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
 
         if (filterKey === "today") return { start: startOfToday, end: startOfTomorrow };
         if (filterKey === "thisMonth") return { start: startOfThisMonth, end: startOfNextMonth };
         if (filterKey === "nextMonth") return { start: startOfNextMonth, end: startOfMonthAfterNext };
-        return { start: startOfTomorrow, end: startIn8Days };
+        if (filterKey === "next7") return { start: startOfToday, end: endOfNext7Exclusive };
+        return { start: startOfToday, end: endOfNext7Exclusive };
       }
 
       function matchesFilter(entry, options) {
@@ -287,10 +296,11 @@
             api("/api/inventory"),
             api("/api/reservations"),
           ]);
+          const inventoryRows = Array.isArray(inventory) ? inventory : [];
           const statusText = (row) => String(row.status || "").trim().toUpperCase();
-          const available = inventory.filter((r) => statusText(r) === "AVAILABLE").length;
-          const returned = inventory.filter((r) => statusText(r).startsWith("RETURN")).length;
-          const down = inventory.filter((r) => statusText(r).startsWith("DOWN")).length;
+          const available = inventoryRows.filter((r) => statusText(r) === "AVAILABLE").length;
+          const returned = inventoryRows.filter((r) => statusText(r).startsWith("RETURN")).length;
+          const down = inventoryRows.filter((r) => statusText(r).startsWith("DOWN")).length;
 
           setMetric("metric-available", available);
           setMetric("metric-returned", returned);
