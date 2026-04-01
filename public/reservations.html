@@ -243,7 +243,10 @@
         const text = options && options.text ? options.text : "";
         const subtext = options && options.subtext ? options.subtext : "";
         const label = options && options.label ? options.label : "Value";
-        const initialValue = options && typeof options.initialValue === "string" ? options.initialValue : "";
+        const initialValue =
+          options && options.initialValue != null && String(options.initialValue).length > 0
+            ? String(options.initialValue)
+            : "";
         const confirmLabel = options && options.confirmLabel ? options.confirmLabel : "Confirm";
         const cancelLabel = options && options.cancelLabel ? options.cancelLabel : "Cancel";
 
@@ -557,7 +560,17 @@
           return;
         }
 
-        const available = inventoryRows.filter((r) => String(r.status || "").trim().toLowerCase() === "available" && r.id !== removeUnit.unitId);
+        const removeInventoryId = removeUnit.unitId || removeUnit.id;
+        if (!removeInventoryId) {
+          setMsg("This reservation is missing unit inventory ids; cannot swap.");
+          return;
+        }
+
+        const available = inventoryRows.filter(
+          (r) =>
+            String(r.status || "").trim().toLowerCase() === "available" &&
+            r.id !== removeInventoryId,
+        );
         if (available.length === 0) {
           setMsg("No Available units to swap into this reservation.");
           return;
@@ -580,11 +593,11 @@
         }
 
         try {
-          await api(`/api/reservations/${id}/swap-unit`, {
+          await api(`/api/reservations/${encodeURIComponent(id)}/swap-unit`, {
             method: "POST",
             body: JSON.stringify({
-              removeUnitId: removeUnit.unitId,
-              addUnitId: addUnit.id,
+              removeUnitId: String(removeInventoryId),
+              addUnitId: String(addUnit.id),
             }),
           });
           setMsg(`Swapped ${removeUnit.unitNumber} -> ${addUnit.unitNumber}.`, true);

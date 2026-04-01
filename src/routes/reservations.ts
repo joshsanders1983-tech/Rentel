@@ -372,13 +372,18 @@ apiReservationsRouter.post("/on-rent/:id/swap-unit", async (req, res) => {
   });
 });
 
+function parseSwapUnitId(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
 apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
   const { id } = req.params;
   const body = req.body as Record<string, unknown>;
-  const removeUnitId =
-    typeof body.removeUnitId === "string" ? body.removeUnitId.trim() : "";
-  const addUnitId =
-    typeof body.addUnitId === "string" ? body.addUnitId.trim() : "";
+  const removeUnitId = parseSwapUnitId(body.removeUnitId);
+  const addUnitId = parseSwapUnitId(body.addUnitId);
 
   if (!removeUnitId || !addUnitId) {
     res.status(400).json({ error: "removeUnitId and addUnitId are required." });

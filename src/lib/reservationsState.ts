@@ -34,9 +34,29 @@ type ReturnedOnRentRecord = OnRentRecord & {
   returnedAt: string;
 };
 
+function normalizeAssignedUnit(raw: unknown): AssignedUnit | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const fromUnitId = typeof o.unitId === "string" ? o.unitId.trim() : "";
+  const fromId = typeof o.id === "string" ? o.id.trim() : "";
+  const unitId = fromUnitId || fromId;
+  if (!unitId) return null;
+  const unitNumber =
+    typeof o.unitNumber === "string"
+      ? o.unitNumber
+      : String(o.unitNumber ?? "");
+  const type = typeof o.type === "string" ? o.type : String(o.type ?? "");
+  return { unitId, unitNumber, type };
+}
+
 function parseUnits(raw: Prisma.JsonValue): AssignedUnit[] {
   if (!Array.isArray(raw)) return [];
-  return raw as AssignedUnit[];
+  const out: AssignedUnit[] = [];
+  for (const item of raw) {
+    const u = normalizeAssignedUnit(item);
+    if (u) out.push(u);
+  }
+  return out;
 }
 
 function rowToReservationRecord(row: {
