@@ -100,7 +100,6 @@
       <div class="brand">
         <div>
           <h1>Dashboard</h1>
-          <div class="sub">This is the app home. Use the navigation row to move across modules as we build.</div>
         </div>
       </div>
       <nav class="top-nav" aria-label="Primary">
@@ -216,7 +215,7 @@
       let dashboardMap = null;
       let markersLayer = null;
       let baseLayer = null;
-      let currentProvider = "google";
+      let currentProvider = "osm";
       let googleReady = false;
       let geocodeLastRequestAt = 0;
 
@@ -410,7 +409,7 @@
       function ensureMap() {
         if (dashboardMap || typeof L === "undefined") return;
         dashboardMap = L.map("dashboard-map", { scrollWheelZoom: false }).setView([39.8283, -98.5795], 4);
-        void applyBaseLayer("google");
+        void applyBaseLayer("osm");
         markersLayer = L.markerClusterGroup({
           showCoverageOnHover: false,
           spiderfyOnMaxZoom: true,
