@@ -4,7 +4,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // One URL: Supabase "Session pooler" from Connect (host aws-0-*.pooler.supabase.com:5432). IPv4-safe for Render.
+  // Single URL (Supabase + Prisma guide — Session pooler DATABASE_URL for migrations + app):
+  // https://supabase.com/docs/guides/database/prisma
+  // Use the Supavisor Session pooler URI from the dashboard (Connect) — port 5432, pooler host — not db.*.supabase.co alone.
   url      = env("DATABASE_URL")
 }
 

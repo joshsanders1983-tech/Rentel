@@ -17,10 +17,14 @@ Use the **same** **`DATABASE_URL`** in **`.env`** on every computer so everyone 
 
 **Supabase is PostgreSQL.** This app stores all persistent data in your Supabase Postgres database using **Prisma** and a single **`DATABASE_URL`** in **`.env`** (see **`.env.example`**). You do **not** need the Supabase JavaScript client (`@supabase/supabase-js`) for normal reads/writes—that is only for features like Supabase Auth, Storage, or Realtime built against Supabase’s APIs.
 
-**Connection string (important):** Supabase’s **direct** host `db.<project>.supabase.co:5432` is often **IPv6-only**. Hosts that only use IPv4 outbound (including **Render**) cannot reach it. Use the **Session pooler** URI from **Connect** (host like `aws-0-….pooler.supabase.com`, port **5432**). One variable is enough for both the app and **`prisma migrate`**.
+**Connection string (verified against Supabase’s docs):** The [Supabase + Prisma guide](https://supabase.com/docs/guides/database/prisma) shows a **single** `DATABASE_URL` using the **Supavisor Session pooler** (URI ends with **port 5432** and the **pooler** hostname) for **both Prisma migrations and the application**. That is what this repo uses (`prisma/schema.prisma` has only `url`, no `directUrl`).
+
+The same guide documents an **alternate** setup (transaction pooler on **6543** + `pgbouncer=true` plus `DIRECT_URL`) for **serverless** workloads. You do **not** need that on Render unless you switch to transaction mode for `DATABASE_URL`; if you ever use port **6543**, Prisma requires `pgbouncer=true` ([troubleshooting](https://supabase.com/docs/guides/database/prisma/prisma-troubleshooting)).
+
+**Why not the “direct” `db.<project>.supabase.co:5432` URL alone?** Supabase documents that [direct connections use IPv6 by default](https://supabase.com/docs/guides/database/connecting-to-postgres#direct-connection); many hosts (including typical IPv4-only outbound paths) should use the **pooler** instead.
 
 1. In [Supabase](https://supabase.com/dashboard), open your project → **Connect** → **Connection string** → **Session pooler**.
-2. Copy the URI into **`DATABASE_URL`** in **`.env`** (replace the password placeholder with your real database password).
+2. Paste the full URI into **`DATABASE_URL`** in **`.env`** (dashboard strings usually include `sslmode=require`).
 3. Run **`npm run db:deploy`** once (or use **`Setup-Rentel.cmd`**) so tables are created in Supabase.
 
 **Copy old data from `dev.db` into Supabase:** If you still have a local SQLite file (`prisma/dev.db` or `dev.db`) from before you switched to Postgres, run `npm run migrate:from-sqlite`. If Supabase already has Rentel rows you want to **replace**, run `npm run migrate:from-sqlite -- --force` (this deletes existing Rentel data in Supabase first). Optional: pass the path to your `.db` file as the last argument. Then restart the app.
@@ -39,11 +43,11 @@ Use the **same** **`DATABASE_URL`** in **`.env`** on every computer so everyone 
 ## Deploy on Render
 
 1. Create a **Web Service** from this GitHub repo (or connect **`render.yaml`** as a Blueprint).
-2. **Root Directory:** leave **empty** (repository root — **not** `src`, or paths and env loading break).
+2. **Root Directory:** leave **empty** (repository root). Render’s default when unset is the repo root ([monorepo / root directory](https://render.com/docs/monorepo-support#setting-a-root-directory)). This project’s **`package.json` is at the repository root**, not inside a `src/` folder—if Root Directory is set to `src`, the service is misaligned with this repo layout.
 3. **Build Command:** `npm ci && npm run build`
 4. **Pre-Deploy Command:** `npm run db:deploy`
 5. **Start Command:** `npm start`
-6. **Environment:** **`DATABASE_URL`** = Supabase **Connect → Session pooler** URI (port **5432**, pooler host). **`ADMIN_PASSWORD`**. You can **delete** any **`DIRECT_URL`** variable left over from older instructions. Do **not** use the bare direct `db.*.supabase.co:5432` URL if Render cannot reach the database (use the pooler URI instead).
+6. **Environment:** **`DATABASE_URL`** = Supabase **Connect → Session pooler** URI (same as local; see [Supabase + Prisma](https://supabase.com/docs/guides/database/prisma)). **`ADMIN_PASSWORD`**.
 
 After deploy, open your **`https://….onrender.com`** URL. **`GET /health`** should return `"ok": true`.
 

@@ -1,6 +1,8 @@
-# Render Web Service — Express app at repo root (no subfolder).
-# Root Directory: leave empty (repo root — not "src"). Set DATABASE_URL + ADMIN_PASSWORD in the dashboard.
-# DATABASE_URL = Supabase Connect → Session pooler only (IPv4-safe). See .env.example.
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# rootDir: omit here so the service uses the repository root (Render default). This repo’s package.json is at the repo root.
+# If the dashboard "Root Directory" is set to `src`, fix it: https://render.com/docs/monorepo-support#setting-a-root-directory
+#
+# DATABASE_URL: Supabase Session pooler only — https://supabase.com/docs/guides/database/prisma
 
 services:
   - type: web

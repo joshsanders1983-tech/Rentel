@@ -10,8 +10,8 @@ const url = process.env.DATABASE_URL?.trim() ?? "";
 if (!url) {
   const renderHint =
     process.env.RENDER === "true"
-      ? " On Render: Environment → add DATABASE_URL only (Supabase Connect → Session pooler URI, port 5432). Remove any old DIRECT_URL variable."
-      : " Copy .env.example to .env and set DATABASE_URL (Supabase → Connect → Session pooler).";
+      ? " On Render: Environment → add DATABASE_URL (Supabase Dashboard → Connect → Session pooler, port 5432). See https://supabase.com/docs/guides/database/prisma"
+      : " Copy .env.example to .env and set DATABASE_URL per https://supabase.com/docs/guides/database/prisma";
   console.error(`[FATAL] DATABASE_URL is missing.${renderHint}`);
   process.exit(1);
 }
