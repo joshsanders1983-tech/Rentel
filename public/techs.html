@@ -58,6 +58,17 @@
       .field-label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
       .field-input, .field-textarea { width:100%; border:1px solid var(--border); border-radius:8px; background:#0d1117; color:var(--text); padding:10px; outline:none; }
       .field-textarea { min-height:74px; resize:vertical; }
+      .techs-two-col {
+        display:grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap:16px;
+        align-items:stretch;
+      }
+      .techs-side-card { max-width:none !important; width:100%; min-width:0; }
+      .techs-side-card .due-services-table-wrap { overflow-x:auto; margin-top:10px; -webkit-overflow-scrolling:touch; }
+      @media (max-width: 900px) {
+        .techs-two-col { grid-template-columns: 1fr; }
+      }
       @media (max-width: 760px) {
         header { padding:12px 14px; }
         .brand { align-items:flex-start; }
@@ -108,38 +119,6 @@
       </div>
 
       <div class="card">
-        <h2>Due Services</h2>
-        <div class="sub">Track due service tasks, assign techs, and complete tasks after inspection submission.</div>
-        <div class="row buttons" style="margin-top:10px;">
-          <div style="min-width:180px;">
-            <label for="due-task-filter" class="inspect-label" style="display:block;margin-bottom:6px;">Task filter</label>
-            <select id="due-task-filter" class="field-input" style="max-width:220px;">
-              <option value="open">Open Tasks</option>
-              <option value="all">All Tasks</option>
-            </select>
-          </div>
-          <button class="btn secondary" id="due-tasks-refresh" type="button">Refresh Tasks</button>
-        </div>
-        <div id="due-task-error" class="msg" style="display:none;"></div>
-        <div id="due-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
-        <table style="margin-top:10px;">
-          <thead>
-            <tr>
-              <th style="width:120px;">Unit</th>
-              <th style="width:120px;">Type</th>
-              <th>Rule</th>
-              <th style="width:150px;">Due / Current</th>
-              <th>Inspection Form</th>
-              <th style="width:200px;">Assigned Tech</th>
-              <th style="width:110px;">Status</th>
-              <th style="width:180px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="due-tasks-body"></tbody>
-        </table>
-      </div>
-
-      <div class="card">
         <div class="row">
           <h2>Returned</h2>
           <div class="sub" id="returned-count">0 units</div>
@@ -182,28 +161,64 @@
         </table>
       </div>
 
-      <div class="card card-half">
-        <h2>Manually Down a Unit</h2>
-        <div class="field-grid">
-          <div>
-            <label class="field-label" for="manual-down-unit">Unit #</label>
-            <input class="field-input" id="manual-down-unit" type="text" />
+      <div class="techs-two-col">
+        <div class="card card-half techs-side-card">
+          <h2>Manually Down a Unit</h2>
+          <div class="field-grid">
+            <div>
+              <label class="field-label" for="manual-down-unit">Unit #</label>
+              <input class="field-input" id="manual-down-unit" type="text" />
+            </div>
+            <div>
+              <label class="field-label" for="manual-down-hours">Hours</label>
+              <input class="field-input" id="manual-down-hours" type="number" min="0" step="0.1" />
+            </div>
+            <div class="full">
+              <label class="field-label" for="manual-down-reason">Reason</label>
+              <textarea class="field-textarea" id="manual-down-reason"></textarea>
+            </div>
           </div>
-          <div>
-            <label class="field-label" for="manual-down-hours">Hours</label>
-            <input class="field-input" id="manual-down-hours" type="number" min="0" step="0.1" />
+          <div class="row buttons" style="margin-top:10px;">
+            <button class="btn warn" id="manual-down-submit" type="button">Down Unit</button>
+            <button class="btn secondary" id="manual-down-cancel" type="button">Cancel</button>
           </div>
-          <div class="full">
-            <label class="field-label" for="manual-down-reason">Reason</label>
-            <textarea class="field-textarea" id="manual-down-reason"></textarea>
+          <div id="manual-down-error" class="msg" style="display:none;"></div>
+          <div id="manual-down-success" class="msg ok" style="display:none;"></div>
+        </div>
+
+        <div class="card card-half techs-side-card">
+          <h2>Due Services</h2>
+          <div class="sub">Track due service tasks, assign techs, and complete tasks after inspection submission.</div>
+          <div class="row buttons" style="margin-top:10px;">
+            <div style="min-width:160px;">
+              <label for="due-task-filter" class="field-label" style="display:block;margin-bottom:6px;">Task filter</label>
+              <select id="due-task-filter" class="field-input" style="max-width:100%;">
+                <option value="open">Open Tasks</option>
+                <option value="all">All Tasks</option>
+              </select>
+            </div>
+            <button class="btn secondary" id="due-tasks-refresh" type="button">Refresh Tasks</button>
+          </div>
+          <div id="due-task-error" class="msg" style="display:none;"></div>
+          <div id="due-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
+          <div class="due-services-table-wrap">
+            <table style="margin-top:10px; min-width:640px;">
+              <thead>
+                <tr>
+                  <th style="width:120px;">Unit</th>
+                  <th style="width:120px;">Type</th>
+                  <th>Rule</th>
+                  <th style="width:150px;">Due / Current</th>
+                  <th>Inspection Form</th>
+                  <th style="width:200px;">Assigned Tech</th>
+                  <th style="width:110px;">Status</th>
+                  <th style="width:180px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="due-tasks-body"></tbody>
+            </table>
           </div>
         </div>
-        <div class="row buttons" style="margin-top:10px;">
-          <button class="btn warn" id="manual-down-submit" type="button">Down Unit</button>
-          <button class="btn secondary" id="manual-down-cancel" type="button">Cancel</button>
-        </div>
-        <div id="manual-down-error" class="msg" style="display:none;"></div>
-        <div id="manual-down-success" class="msg ok" style="display:none;"></div>
       </div>
       <div id="maintenance-error" class="msg" style="display:none;"></div>
     </main>

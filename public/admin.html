@@ -1421,7 +1421,6 @@
         renderInspectionFormSelect();
         renderMaintenanceRuleInspectionFormSelect();
         renderMaintenanceRules();
-        renderMaintenanceTasks();
       }
 
       async function loadInspectionAssetMappings() {
@@ -1433,7 +1432,6 @@
       async function loadTechnicians() {
         technicians = await api("/api/tech-auth/technicians");
         renderTechEntryPanel();
-        renderMaintenanceTasks();
       }
 
       function openEditModal(row) {

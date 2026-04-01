@@ -649,90 +649,95 @@ apiMaintenanceAutomationRouter.patch(
 );
 
 apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireTechOrAdmin, async (req, res) => {
-  await ensureMaintenanceAutomationSchema();
-  const taskId = typeof req.params.id === "string" ? req.params.id.trim() : "";
-  if (!taskId) {
-    res.status(400).json({ error: "Invalid task id." });
-    return;
-  }
+  try {
+    await ensureMaintenanceAutomationSchema();
+    const taskId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!taskId) {
+      res.status(400).json({ error: "Invalid task id." });
+      return;
+    }
 
-  const taskRows = await queryRows<{
-    id: string;
-    inventoryId: string;
-    status: TaskStatus;
-    createdAt: string;
-    inspectionFormId: string | null;
-  }>(
-    `
-    SELECT "id", "inventoryId", "status", "createdAt", "inspectionFormId"
-    FROM "MaintenanceTask"
-    WHERE "id" = $1
-    `,
-    taskId,
-  );
-  const task = taskRows[0];
-  if (!task) {
-    res.status(404).json({ error: "Maintenance task not found." });
-    return;
-  }
-  if (task.status === "COMPLETED") {
-    res.json({ ok: true, alreadyCompleted: true });
-    return;
-  }
+    const taskRows = await queryRows<{
+      id: string;
+      inventoryId: string;
+      status: TaskStatus;
+      createdAt: string;
+      inspectionFormId: string | null;
+    }>(
+      `
+      SELECT "id", "inventoryId", "status", "createdAt", "inspectionFormId"
+      FROM "MaintenanceTask"
+      WHERE "id" = $1
+      `,
+      taskId,
+    );
+    const task = taskRows[0];
+    if (!task) {
+      res.status(404).json({ error: "Maintenance task not found." });
+      return;
+    }
+    if (task.status === "COMPLETED") {
+      res.json({ ok: true, alreadyCompleted: true });
+      return;
+    }
 
-  const latestInspectionRows = await queryRows<{
-    id: string;
-    formId: string;
-    submittedAt: string;
-  }>(
-    `
-    SELECT "id", "formId", "submittedAt"
-    FROM "InspectionSubmission"
-    WHERE "inventoryId" = $1
-      AND "submittedAt" >= $2
-    ORDER BY "submittedAt" DESC
-    LIMIT 1
-    `,
-    task.inventoryId,
-    task.createdAt,
-  );
-  const latestInspection = latestInspectionRows[0];
-  if (!latestInspection) {
-    res.status(400).json({
-      error:
-        "Inspection is required before completing this service task. Submit inspection first.",
+    const createdRaw = task.createdAt as unknown;
+    const taskCreatedAt =
+      createdRaw instanceof Date ? createdRaw : new Date(String(createdRaw ?? ""));
+    if (Number.isNaN(taskCreatedAt.getTime())) {
+      res.status(400).json({ error: "Maintenance task has an invalid created-at timestamp." });
+      return;
+    }
+
+    const latestInspection = await prisma.inspectionSubmission.findFirst({
+      where: {
+        inventoryId: task.inventoryId,
+        submittedAt: { gte: taskCreatedAt },
+      },
+      orderBy: { submittedAt: "desc" },
+      select: { id: true, formId: true },
     });
-    return;
-  }
-  if (
-    task.inspectionFormId &&
-    latestInspection.formId !== task.inspectionFormId
-  ) {
-    res.status(400).json({
-      error:
-        "Latest inspection used a different form than this service task requires.",
-    });
-    return;
-  }
 
-  const completedAt = nowIso();
-  await run(
-    `
-    UPDATE "MaintenanceTask"
-    SET "status" = 'COMPLETED',
-        "completedAt" = $1,
-        "completionInspectionSubmissionId" = $2,
-        "updatedAt" = $3
-    WHERE "id" = $4
-    `,
-    completedAt,
-    latestInspection.id,
-    completedAt,
-    task.id,
-  );
+    if (!latestInspection) {
+      res.status(400).json({
+        error:
+          "Inspection is required before completing this service task. Submit inspection first.",
+      });
+      return;
+    }
 
-  await refreshInventoryMaintenanceStateForUnits([task.inventoryId]);
-  res.json({ ok: true });
+    const requiredFormId = task.inspectionFormId ? String(task.inspectionFormId) : "";
+    const submissionFormId = latestInspection.formId ? String(latestInspection.formId) : "";
+    if (requiredFormId && submissionFormId !== requiredFormId) {
+      res.status(400).json({
+        error:
+          "Latest inspection used a different form than this service task requires.",
+      });
+      return;
+    }
+
+    const completedAt = nowIso();
+    await run(
+      `
+      UPDATE "MaintenanceTask"
+      SET "status" = 'COMPLETED',
+          "completedAt" = $1,
+          "completionInspectionSubmissionId" = $2,
+          "updatedAt" = $3
+      WHERE "id" = $4
+      `,
+      completedAt,
+      latestInspection.id,
+      completedAt,
+      task.id,
+    );
+
+    await refreshInventoryMaintenanceStateForUnits([task.inventoryId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[maintenance-automation] POST /tasks/:id/complete failed:", err);
+    res.status(500).json({ error: "Failed to complete maintenance task." });
+  }
 });
 
 apiMaintenanceAutomationRouter.post("/recheck-all", requireAdmin, async (_req, res) => {
