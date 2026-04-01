@@ -10,6 +10,7 @@ type RepairHistoryRow = {
   details: string | null;
   techName: string | null;
   repairHours: number | null;
+  laborHours: number | null;
   createdAt: string;
 };
 
@@ -62,6 +63,17 @@ async function ensureRepairHistorySchema(): Promise<void> {
     }
   }
 
+  try {
+    await run(`
+      ALTER TABLE "RepairHistoryEntry"
+      ADD COLUMN "laborHours" REAL
+    `);
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) {
+      throw error;
+    }
+  }
+
   await run(`
     CREATE INDEX IF NOT EXISTS "RepairHistoryEntry_inventoryId_createdAt_idx"
     ON "RepairHistoryEntry" ("inventoryId", "createdAt")
@@ -74,6 +86,7 @@ export async function appendRepairHistoryEntry(input: {
   details?: string | null;
   techName?: string | null;
   repairHours?: number | null;
+  laborHours?: number | null;
   createdAt?: Date;
 }): Promise<void> {
   const inventoryId = String(input.inventoryId || "").trim();
@@ -89,6 +102,10 @@ export async function appendRepairHistoryEntry(input: {
     typeof input.repairHours === "number" && Number.isFinite(input.repairHours)
       ? Number(input.repairHours)
       : null;
+  const laborHours =
+    typeof input.laborHours === "number" && Number.isFinite(input.laborHours)
+      ? Number(input.laborHours)
+      : null;
   const createdAt = input.createdAt ? input.createdAt.toISOString() : nowIso();
 
   await ensureRepairHistorySchema();
@@ -101,8 +118,9 @@ export async function appendRepairHistoryEntry(input: {
       "details",
       "techName",
       "repairHours",
+      "laborHours",
       "createdAt"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `,
     randomUUID(),
     inventoryId,
@@ -110,6 +128,7 @@ export async function appendRepairHistoryEntry(input: {
     details || null,
     techName || null,
     repairHours,
+    laborHours,
     createdAt,
   );
 }
@@ -132,6 +151,7 @@ export async function getRepairHistoryEntries(
       "details",
       "techName",
       "repairHours",
+      "laborHours",
       "createdAt"
     FROM "RepairHistoryEntry"
     WHERE "inventoryId" = $1

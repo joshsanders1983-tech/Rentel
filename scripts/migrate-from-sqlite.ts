@@ -239,6 +239,7 @@ async function main() {
         details: r.details != null ? str(r.details) : null,
         techName: r.techName != null ? str(r.techName) : null,
         repairHours: num(r.repairHours),
+        laborHours: num(r.laborHours),
         createdAt: dt(r.createdAt),
       },
     });

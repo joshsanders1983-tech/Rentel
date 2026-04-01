@@ -57,7 +57,10 @@ model RepairHistoryEntry {
   action      String
   details     String?
   techName    String?
+  /// Unit hour meter reading at time of entry (equipment hours).
   repairHours Float?
+  /// Shop labor hours (complete repair flow); distinct from unit meter hours.
+  laborHours  Float?
   createdAt   DateTime  @default(now())
 
   @@index([inventoryId, createdAt])

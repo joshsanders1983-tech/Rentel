@@ -59,6 +59,9 @@
       .field-label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
       .field-input, .field-textarea { width:100%; border:1px solid var(--border); border-radius:8px; background:#0d1117; color:var(--text); padding:10px; outline:none; }
       .field-textarea { min-height:74px; resize:vertical; }
+      .complete-part-rows { margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+      .complete-part-row { display:grid; grid-template-columns:1fr 88px 40px; gap:8px; align-items:end; }
+      .complete-part-row .complete-part-remove { padding:8px 0; max-height:38px; }
       .techs-two-col {
         display:grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -291,16 +294,37 @@
     </div>
 
     <div class="modal-backdrop" id="complete-modal-backdrop" aria-hidden="true">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="complete-modal-title" style="max-width:520px;">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="complete-modal-title" style="max-width:640px;">
         <h3 id="complete-modal-title">Complete Repair</h3>
         <div class="inspect-grid" style="grid-template-columns:120px 1fr;">
           <div class="inspect-label">Unit</div><div id="complete-unit-number">-</div>
-          <div class="inspect-label">Current Hours</div><div id="complete-current-hours">-</div>
+          <div class="inspect-label">Type</div><div id="complete-unit-type">-</div>
+          <div class="inspect-label">Description</div><div id="complete-unit-description">-</div>
+          <div class="inspect-label">Recorded hours</div><div id="complete-current-hours">-</div>
+          <div class="inspect-label">Tech</div><div id="complete-tech-name">-</div>
         </div>
         <form id="complete-form">
-          <div class="inspect-hour-wrap" style="display:block;">
-            <label for="complete-hour-meter">Hours (required)</label>
-            <input id="complete-hour-meter" type="number" min="0" step="0.1" />
+          <div class="field-grid" style="margin-top:12px;">
+            <div class="full">
+              <label class="field-label" for="complete-work-performed">Work performed</label>
+              <textarea id="complete-work-performed" class="field-textarea" placeholder="Describe work completed..." required></textarea>
+            </div>
+            <div>
+              <label class="field-label" for="complete-labor-hours">Labor hrs</label>
+              <input id="complete-labor-hours" class="field-input" type="number" min="0" step="0.1" placeholder="0" />
+            </div>
+            <div>
+              <label class="field-label" for="complete-hour-meter">Current unit hours</label>
+              <input id="complete-hour-meter" class="field-input" type="number" min="0" step="0.1" />
+            </div>
+            <div class="full">
+              <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="field-label" style="margin:0;">Parts</span>
+                <button class="btn small secondary" type="button" id="complete-add-part">Add part line</button>
+              </div>
+              <p class="inspect-help-text" style="margin:0 0 6px;">Enter Part # (use <strong>None</strong> if no parts) and quantity for each line.</p>
+              <div id="complete-part-rows" class="complete-part-rows"></div>
+            </div>
           </div>
           <div class="modal-actions">
             <button class="btn secondary" id="close-complete-modal" type="button">Cancel</button>
@@ -347,10 +371,11 @@
           <thead>
             <tr>
               <th style="width:200px;">Date</th>
-              <th style="width:120px;">Action</th>
-              <th style="width:120px;">Hours</th>
+              <th style="width:100px;">Action</th>
+              <th style="width:90px;">Unit hrs</th>
+              <th style="width:90px;">Labor</th>
               <th>Details</th>
-              <th style="width:140px;">Tech</th>
+              <th style="width:130px;">Tech</th>
             </tr>
           </thead>
           <tbody id="history-body"></tbody>
@@ -393,8 +418,15 @@
       const inspectHourWrap = $("inspect-hour-wrap");
       const inspectHourMeter = $("inspect-hour-meter");
       const completeUnitNumber = $("complete-unit-number");
+      const completeUnitType = $("complete-unit-type");
+      const completeUnitDescription = $("complete-unit-description");
+      const completeTechName = $("complete-tech-name");
+      const completeWorkPerformed = $("complete-work-performed");
+      const completeLaborHours = $("complete-labor-hours");
       const completeCurrentHours = $("complete-current-hours");
       const completeHourMeter = $("complete-hour-meter");
+      const completePartRows = $("complete-part-rows");
+      const completeAddPart = $("complete-add-part");
       const completeSubmit = $("complete-submit");
       const completeModalTitle = $("complete-modal-title");
       const completeError = $("complete-error");
@@ -441,6 +473,7 @@
       let inspectionFormItems = [];
       let activeInspectUnit = null;
       let activeCompleteUnit = null;
+      let shopTechDisplayName = "-";
       let damagePhotoFiles = [];
       let dueMaintenanceTasks = [];
       let dueTechnicianDirectory = [];
@@ -758,15 +791,20 @@
 
         historyEmpty.style.display = "none";
         for (const entry of entries) {
+          const labor =
+            entry.laborHours != null && Number.isFinite(Number(entry.laborHours))
+              ? formatHours(entry.laborHours)
+              : "-";
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(formatDateTime(entry.createdAt))}</td>
             <td>${escapeHtml(formatHistoryAction(entry.action))}</td>
             <td>${escapeHtml(formatHours(entry.repairHours))}</td>
+            <td>${escapeHtml(labor)}</td>
             <td>${escapeHtml(entry.details ?? "-")}</td>
             <td>${escapeHtml(entry.techName ?? "-")}</td>
           `;
-          applyMobileLabels(tr, ["Date", "Action", "Hours", "Details", "Tech"]);
+          applyMobileLabels(tr, ["Date", "Action", "Unit hrs", "Labor", "Details", "Tech"]);
           historyBody.appendChild(tr);
         }
       }
@@ -910,8 +948,14 @@
         if (id === "complete-modal-backdrop") {
           activeCompleteUnit = null;
           completeUnitNumber.textContent = "-";
+          completeUnitType.textContent = "-";
+          completeUnitDescription.textContent = "-";
+          completeTechName.textContent = "-";
+          completeWorkPerformed.value = "";
+          completeLaborHours.value = "";
           completeCurrentHours.textContent = "-";
           completeHourMeter.value = "";
+          resetCompletePartRows();
           completeSubmit.disabled = false;
           completeSubmit.textContent = "Complete";
           completeModalTitle.textContent = "Complete Repair";
@@ -966,21 +1010,63 @@
         }
       }
 
+      function updateCompletePartRemoveButtons() {
+        const rows = completePartRows.querySelectorAll(".complete-part-row");
+        rows.forEach((rowEl) => {
+          const btn = rowEl.querySelector(".complete-part-remove");
+          if (btn) btn.style.visibility = rows.length <= 1 ? "hidden" : "visible";
+        });
+      }
+
+      function addCompletePartRow(defaultPart, defaultQty) {
+        const row = document.createElement("div");
+        row.className = "complete-part-row";
+        row.innerHTML = `
+          <div>
+            <label class="field-label">Part #</label>
+            <input type="text" class="field-input complete-part-number" placeholder="None or part #" value="${escapeHtml(defaultPart ?? "")}" />
+          </div>
+          <div>
+            <label class="field-label">Qty</label>
+            <input type="number" class="field-input complete-part-qty" min="0.0001" step="any" placeholder="1" value="${defaultQty != null ? escapeHtml(String(defaultQty)) : ""}" />
+          </div>
+          <button type="button" class="btn secondary small complete-part-remove" title="Remove line">×</button>
+        `;
+        const removeBtn = row.querySelector(".complete-part-remove");
+        removeBtn.addEventListener("click", () => {
+          if (completePartRows.querySelectorAll(".complete-part-row").length <= 1) return;
+          row.remove();
+          updateCompletePartRemoveButtons();
+        });
+        completePartRows.appendChild(row);
+        updateCompletePartRemoveButtons();
+      }
+
+      function resetCompletePartRows() {
+        completePartRows.innerHTML = "";
+        addCompletePartRow("None", "1");
+      }
+
       function openCompleteModal(row) {
         activeCompleteUnit = row;
         const serviceDue = isServiceDueDown(row);
         completeModalTitle.textContent = serviceDue ? "Complete Service" : "Complete Repair";
         completeUnitNumber.textContent = row && row.unitNumber ? row.unitNumber : "-";
+        completeUnitType.textContent = row && row.asset ? row.asset.type ?? "-" : "-";
+        completeUnitDescription.textContent = row && row.asset ? row.asset.description ?? "-" : "-";
+        completeTechName.textContent = shopTechDisplayName;
         completeCurrentHours.textContent = formatHours(row && row.hours);
         completeHourMeter.value = Number.isFinite(Number(row && row.hours))
           ? String(Number(row.hours))
           : "";
+        completeWorkPerformed.value = "";
+        completeLaborHours.value = "";
+        resetCompletePartRows();
         completeSubmit.disabled = false;
         completeSubmit.textContent = serviceDue ? "Complete Service" : "Complete";
         setMsg(completeError, "");
         openModal("complete-modal-backdrop");
-        completeHourMeter.focus();
-        completeHourMeter.select();
+        completeWorkPerformed.focus();
       }
 
       async function openRepairHistoryModal(row) {
@@ -1226,6 +1312,7 @@
           String(session.techName || "").trim() ||
           String(session.username || "").trim() ||
           "-";
+        shopTechDisplayName = displayName;
         techSessionName.textContent = `Signed in as ${displayName}`;
       }
 
@@ -1295,13 +1382,59 @@
           setMsg(completeError, "Select a unit to complete.");
           return;
         }
-        const parsedHours = Number(completeHourMeter.value);
+        const workPerformed = completeWorkPerformed.value.trim();
+        if (!workPerformed) {
+          setMsg(completeError, "Work performed is required.");
+          return;
+        }
+        const laborText = completeLaborHours.value.trim();
+        if (!laborText) {
+          setMsg(completeError, "Labor hours is required.");
+          return;
+        }
+        const parsedLabor = Number(laborText);
+        if (!Number.isFinite(parsedLabor)) {
+          setMsg(completeError, "Labor hours must be a valid number.");
+          return;
+        }
+        if (parsedLabor < 0) {
+          setMsg(completeError, "Labor hours cannot be negative.");
+          return;
+        }
+        const hoursText = completeHourMeter.value.trim();
+        if (!hoursText) {
+          setMsg(completeError, "Current unit hours is required.");
+          return;
+        }
+        const parsedHours = Number(hoursText);
         if (!Number.isFinite(parsedHours)) {
-          setMsg(completeError, "Hours is required.");
+          setMsg(completeError, "Current unit hours must be a valid number.");
           return;
         }
         if (parsedHours < 0) {
-          setMsg(completeError, "Hours cannot be negative.");
+          setMsg(completeError, "Current unit hours cannot be negative.");
+          return;
+        }
+
+        const partRows = completePartRows.querySelectorAll(".complete-part-row");
+        const parts = [];
+        for (const rowEl of partRows) {
+          const numEl = rowEl.querySelector(".complete-part-number");
+          const qtyEl = rowEl.querySelector(".complete-part-qty");
+          const partNumber = numEl && numEl.value != null ? String(numEl.value).trim() : "";
+          const qty = qtyEl != null ? Number(qtyEl.value) : NaN;
+          if (!partNumber) {
+            setMsg(completeError, "Each part line needs a Part # (enter None if no part).");
+            return;
+          }
+          if (!Number.isFinite(qty) || qty <= 0) {
+            setMsg(completeError, "Each part line needs a quantity greater than zero.");
+            return;
+          }
+          parts.push({ partNumber, qty });
+        }
+        if (parts.length === 0) {
+          setMsg(completeError, "Add at least one part line.");
           return;
         }
 
@@ -1312,7 +1445,12 @@
         try {
           await api(`/api/inventory/${encodeURIComponent(activeCompleteUnit.id)}/complete`, {
             method: "POST",
-            body: JSON.stringify({ hours: parsedHours }),
+            body: JSON.stringify({
+              hours: parsedHours,
+              laborHours: parsedLabor,
+              workPerformed,
+              parts,
+            }),
           });
           closeModal("complete-modal-backdrop");
           await refreshMaintenanceAndDueTasks();
@@ -1467,6 +1605,7 @@
 
       $("close-inspect-modal").addEventListener("click", () => closeModal("inspect-modal-backdrop"));
       $("close-complete-modal").addEventListener("click", () => closeModal("complete-modal-backdrop"));
+      completeAddPart.addEventListener("click", () => addCompletePartRow("", ""));
       $("close-history-modal").addEventListener("click", () => closeModal("history-modal-backdrop"));
       $("complete-form").addEventListener("submit", (event) => {
         event.preventDefault();

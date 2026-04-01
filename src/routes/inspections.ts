@@ -4,8 +4,10 @@ import { getCurrentInventoryHours } from "../lib/inspectionHours.js";
 import {
   completeOpenMaintenanceTasksForInspection,
   evaluateMaintenanceRulesForUnits,
+  type InventoryServiceStateOptions,
 } from "../lib/maintenanceAutomation.js";
 import { prisma } from "../lib/prisma.js";
+import { invalidateInventoryCache } from "./inventory.js";
 import { appendRepairHistoryEntry } from "../lib/repairHistory.js";
 import { removeReturnedOnRentUnit } from "../lib/reservationsState.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
@@ -760,6 +762,10 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
   const downReason = reasonParts.length > 0 ? reasonParts.join(" | ") : null;
   const nextInventoryStatus =
     needsAttentionSelected || damagedSelected ? STATUS_DOWN : STATUS_AVAILABLE;
+  const serviceStateOpts: InventoryServiceStateOptions | undefined =
+    nextInventoryStatus === STATUS_AVAILABLE
+      ? { skipServiceDueAvailabilityDowngradeForIds: new Set([inventoryId]) }
+      : undefined;
   const actorName = getTechSession(req)?.techName || "";
 
   const submittedAt = new Date();
@@ -822,8 +828,11 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
     inspectionResult.inspectionSubmissionId,
     form.id,
     submittedAtIso,
+    serviceStateOpts,
   );
-  await evaluateMaintenanceRulesForUnits([inventoryId]);
+  await evaluateMaintenanceRulesForUnits([inventoryId], serviceStateOpts);
+
+  invalidateInventoryCache();
 
   const refreshedUnit = await prisma.inventory.findUnique({
     where: { id: inventoryId },

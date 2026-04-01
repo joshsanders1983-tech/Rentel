@@ -274,9 +274,22 @@ function metricForRule(
   return Math.floor(rentalCounterByInventoryId.get(inventory.id) ?? 0);
 }
 
-async function applyInventoryServiceState(inventoryIds: string[]): Promise<void> {
+export type InventoryServiceStateOptions = {
+  /**
+   * For these inventory ids, open tasks whose reasons are only "Service Due: …" will not
+   * force Available → Down (used after a clean post-return inspection).
+   */
+  skipServiceDueAvailabilityDowngradeForIds?: Set<string>;
+};
+
+async function applyInventoryServiceState(
+  inventoryIds: string[],
+  options?: InventoryServiceStateOptions,
+): Promise<void> {
   const ids = toIdList(inventoryIds);
   if (ids.length === 0) return;
+
+  const skipDownIds = options?.skipServiceDueAvailabilityDowngradeForIds;
 
   const inventories = await getInventoryRows(ids);
   if (inventories.length === 0) return;
@@ -302,6 +315,10 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
   for (const inventory of inventories) {
     const reasons = reasonsByInventory.get(inventory.id) || [];
     const hasOpenTasks = reasons.length > 0;
+    const onlyServiceDueTasks =
+      reasons.length > 0 && reasons.every((r) => isServiceDueReason(r));
+    const skipServiceDueDowngrade =
+      Boolean(skipDownIds?.has(inventory.id)) && onlyServiceDueTasks;
     const currentStatus = normalizeStatus(inventory.status);
     const nextReason = hasOpenTasks ? reasons.join(" | ") : null;
     const shouldProtectLiveRental =
@@ -309,7 +326,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
 
     const updates: Record<string, unknown> = {};
 
-    if (hasOpenTasks) {
+    if (hasOpenTasks && !skipServiceDueDowngrade) {
       if (!shouldProtectLiveRental && currentStatus !== STATUS_DOWN) {
         updates.status = STATUS_DOWN;
       }
@@ -319,7 +336,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
       if (inventory.downReason !== nextReason) {
         updates.downReason = nextReason;
       }
-    } else {
+    } else if (!hasOpenTasks) {
       if (isServiceDueReason(inventory.downReason) && inventory.downReason !== null) {
         updates.downReason = null;
       }
@@ -349,6 +366,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
 
 export async function evaluateMaintenanceRulesForUnits(
   inventoryIdsInput: string[],
+  serviceStateOptions?: InventoryServiceStateOptions,
 ): Promise<void> {
   if (!(await ensureMaintenanceAutomationSchemaSafe("evaluate-units"))) return;
 
@@ -378,7 +396,7 @@ export async function evaluateMaintenanceRulesForUnits(
   );
 
   if (activeRules.length === 0) {
-    await applyInventoryServiceState(inventoryIds);
+    await applyInventoryServiceState(inventoryIds, serviceStateOptions);
     return;
   }
 
@@ -481,7 +499,7 @@ export async function evaluateMaintenanceRulesForUnits(
     }
   }
 
-  await applyInventoryServiceState(inventoryIds);
+  await applyInventoryServiceState(inventoryIds, serviceStateOptions);
 }
 
 export async function evaluateMaintenanceRulesForAllUnits(): Promise<void> {
@@ -520,6 +538,7 @@ export async function completeOpenMaintenanceTasksForInspection(
   inspectionSubmissionId: string,
   inspectionFormId: string,
   submittedAtIso: string,
+  serviceStateOptions?: InventoryServiceStateOptions,
 ): Promise<void> {
   if (!(await ensureMaintenanceAutomationSchemaSafe("complete-for-inspection"))) return;
   const normalizedInventoryId = String(inventoryId || "").trim();
@@ -557,7 +576,7 @@ export async function completeOpenMaintenanceTasksForInspection(
     );
   }
 
-  await applyInventoryServiceState([normalizedInventoryId]);
+  await applyInventoryServiceState([normalizedInventoryId], serviceStateOptions);
 }
 
 export async function completeOpenMaintenanceTasksForInventory(

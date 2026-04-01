@@ -28,7 +28,8 @@ let inventoryCache:
     }
   | null = null;
 
-function invalidateInventoryCache() {
+/** Clears the short-lived GET /api/inventory cache after mutations (also used by inspections). */
+export function invalidateInventoryCache() {
   inventoryCache = null;
 }
 
@@ -126,6 +127,50 @@ function parseDownReasonField(
 
   const trimmed = rawReason.trim();
   return { valid: true, hasValue: true, value: trimmed || null };
+}
+
+type CompleteRepairPartLine = { partNumber: string; qty: number };
+
+function parseCompleteRepairParts(body: Record<string, unknown>): CompleteRepairPartLine[] | null {
+  const raw = body.parts;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null;
+  }
+  const out: CompleteRepairPartLine[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+    const rec = item as Record<string, unknown>;
+    const partNumber =
+      typeof rec.partNumber === "string" ? rec.partNumber.trim() : "";
+    const qty = Number(rec.qty);
+    if (!partNumber) {
+      return null;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return null;
+    }
+    out.push({ partNumber, qty });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function formatCompleteRepairDetails(input: {
+  unitNumber: string;
+  assetType: string | null;
+  assetDescription: string | null;
+  workPerformed: string;
+  parts: CompleteRepairPartLine[];
+  priorDownReason: string | null;
+}): string {
+  const header = `Unit: ${input.unitNumber} · ${input.assetType ?? "—"} · ${input.assetDescription ?? "—"}`;
+  const partsLine = input.parts.map((p) => `${p.partNumber} × ${p.qty}`).join("; ");
+  const lines = [header, "", `Work performed: ${input.workPerformed}`, `Parts: ${partsLine}`];
+  if (input.priorDownReason) {
+    lines.push(`Prior down reason: ${input.priorDownReason}`);
+  }
+  return lines.join("\n");
 }
 
 apiInventoryRouter.get("/", async (_req, res) => {
@@ -448,15 +493,43 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
     }
 
     const body = req.body as Record<string, unknown>;
-    const actorName = getTechSession(req)?.techName || "";
+    const techSession = getTechSession(req);
+    const actorName =
+      (techSession?.techName && String(techSession.techName).trim()) ||
+      (techSession?.username && String(techSession.username).trim()) ||
+      "";
     const repairHours = Number(body.hours);
+    const laborHours = Number(body.laborHours);
+    const workPerformed =
+      typeof body.workPerformed === "string" ? body.workPerformed.trim() : "";
 
     if (!Number.isFinite(repairHours)) {
-      res.status(400).json({ error: "Hours is required and must be a valid number." });
+      res.status(400).json({ error: "Current unit hours is required and must be a valid number." });
       return;
     }
     if (repairHours < 0) {
-      res.status(400).json({ error: "Hours cannot be negative." });
+      res.status(400).json({ error: "Current unit hours cannot be negative." });
+      return;
+    }
+    if (!Number.isFinite(laborHours)) {
+      res.status(400).json({ error: "Labor hours is required and must be a valid number." });
+      return;
+    }
+    if (laborHours < 0) {
+      res.status(400).json({ error: "Labor hours cannot be negative." });
+      return;
+    }
+    if (!workPerformed) {
+      res.status(400).json({ error: "Work performed is required." });
+      return;
+    }
+
+    const parts = parseCompleteRepairParts(body);
+    if (!parts) {
+      res.status(400).json({
+        error:
+          "Add at least one part line with Part # (use \"None\" if no parts) and a quantity greater than zero.",
+      });
       return;
     }
 
@@ -474,7 +547,7 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
     }
     if (existing.hours !== null && repairHours < existing.hours) {
       res.status(400).json({
-        error: `Hours must be greater than or equal to ${existing.hours} (current unit hours).`,
+        error: `Current unit hours must be greater than or equal to ${existing.hours} (the unit's recorded hours).`,
       });
       return;
     }
@@ -492,16 +565,24 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
       include: { asset: true },
     });
 
+    const repairDetails = formatCompleteRepairDetails({
+      unitNumber: existing.unitNumber,
+      assetType: existing.asset?.type ?? null,
+      assetDescription: existing.asset?.description ?? null,
+      workPerformed,
+      parts,
+      priorDownReason: existing.downReason ?? null,
+    });
+
     // Non-critical side effects should not fail the complete action response.
     try {
       await appendRepairHistoryEntry({
         inventoryId: updated.id,
         action: "COMPLETE",
-        details: existing.downReason
-          ? `Completed repair: ${existing.downReason}`
-          : "Completed repair and returned unit to Available.",
+        details: repairDetails,
         techName: actorName || null,
         repairHours,
+        laborHours,
         createdAt: completedAt,
       });
 
