@@ -268,38 +268,6 @@
         </div>
 
         <div class="card">
-          <h2>Due Services</h2>
-          <div class="sub">Track due service tasks, assign techs, and complete tasks after inspection submission.</div>
-          <div class="row" style="margin-top:10px;">
-            <div style="min-width:180px;">
-              <label for="maintenance-task-filter">Task Filter</label>
-              <select id="maintenance-task-filter">
-                <option value="open">Open Tasks</option>
-                <option value="all">All Tasks</option>
-              </select>
-            </div>
-            <button class="secondary" id="maintenance-tasks-refresh" type="button">Refresh Tasks</button>
-          </div>
-          <div id="maintenance-task-error" class="msg" style="display:none;"></div>
-          <div id="maintenance-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
-          <table style="margin-top:10px;">
-            <thead>
-              <tr>
-                <th style="width:120px;">Unit</th>
-                <th style="width:120px;">Type</th>
-                <th>Rule</th>
-                <th style="width:150px;">Due / Current</th>
-                <th>Inspection Form</th>
-                <th style="width:200px;">Assigned Tech</th>
-                <th style="width:110px;">Status</th>
-                <th style="width:180px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="maintenance-tasks-body"></tbody>
-          </table>
-        </div>
-
-        <div class="card">
           <h2>Inventory</h2>
           <div id="inventory-empty" class="empty" style="display:none;">No units yet. Use Add Inventory.</div>
           <table>
@@ -545,11 +513,6 @@
       const maintenanceRuleErr = $("maintenance-rule-error");
       const maintenanceRulesEmpty = $("maintenance-rules-empty");
       const maintenanceRulesBody = $("maintenance-rules-body");
-      const maintenanceTaskFilter = $("maintenance-task-filter");
-      const maintenanceTasksRefreshBtn = $("maintenance-tasks-refresh");
-      const maintenanceTaskErr = $("maintenance-task-error");
-      const maintenanceTasksEmpty = $("maintenance-tasks-empty");
-      const maintenanceTasksBody = $("maintenance-tasks-body");
 
       let assets = [];
       let inventoryRows = [];
@@ -561,7 +524,6 @@
       let technicians = [];
       let selectedTechnicianId = "";
       let maintenanceRules = [];
-      let maintenanceTasks = [];
       let lastRentedByUnit = {};
       let editOriginalStatus = "";
       let confirmResolver = null;
@@ -727,16 +689,6 @@
         );
         inspectionAssignmentSummary.textContent =
           `Assigned asset types (${assetLabels.length}): ${assetLabels.join(", ")}`;
-      }
-
-      function titleCaseWords(value) {
-        return String(value ?? "")
-          .trim()
-          .toLowerCase()
-          .split(/[\s_]+/)
-          .filter(Boolean)
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(" ");
       }
 
       function readMultiSelectValues(select) {
@@ -943,7 +895,7 @@
                 method: "PATCH",
                 body: JSON.stringify({ active: !rule.active }),
               });
-              await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+              await Promise.all([loadMaintenanceRules(), loadInventory()]);
             } catch (e) {
               setMsg(maintenanceRuleErr, String(e.message || e));
             }
@@ -970,7 +922,7 @@
               if (maintenanceRuleId.value === rule.id) {
                 resetMaintenanceRuleForm();
               }
-              await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+              await Promise.all([loadMaintenanceRules(), loadInventory()]);
             } catch (e) {
               setMsg(maintenanceRuleErr, String(e.message || e));
             }
@@ -982,114 +934,6 @@
           tr.appendChild(actionsCell);
 
           maintenanceRulesBody.appendChild(tr);
-        }
-      }
-
-      function renderMaintenanceTasks() {
-        maintenanceTasksBody.innerHTML = "";
-        if (!maintenanceTasks || maintenanceTasks.length === 0) {
-          maintenanceTasksEmpty.style.display = "block";
-          return;
-        }
-        maintenanceTasksEmpty.style.display = "none";
-
-        for (const task of maintenanceTasks) {
-          const tr = document.createElement("tr");
-
-          const unitCell = document.createElement("td");
-          unitCell.textContent = task.unitNumber || "-";
-          tr.appendChild(unitCell);
-
-          const typeCell = document.createElement("td");
-          typeCell.textContent = task.assetType || "-";
-          tr.appendChild(typeCell);
-
-          const ruleCell = document.createElement("td");
-          ruleCell.textContent = task.ruleName || task.reason || "-";
-          tr.appendChild(ruleCell);
-
-          const dueCurrentCell = document.createElement("td");
-          const metricSuffix = task.triggerType === "RENTAL_COUNT" ? "rentals" : "hrs";
-          dueCurrentCell.textContent = `${task.dueValue} ${metricSuffix} / ${task.currentValue} ${metricSuffix}`;
-          tr.appendChild(dueCurrentCell);
-
-          const formCell = document.createElement("td");
-          formCell.textContent = task.inspectionFormName || "Any inspection form";
-          tr.appendChild(formCell);
-
-          const techCell = document.createElement("td");
-          const techSelect = document.createElement("select");
-          const noneOpt = document.createElement("option");
-          noneOpt.value = "";
-          noneOpt.textContent = "Unassigned";
-          techSelect.appendChild(noneOpt);
-          const knownTechNames = new Set();
-          for (const technician of technicians) {
-            const configuredName =
-              String(technician.techName || "").trim() ||
-              String(technician.username || "").trim();
-            if (configuredName) {
-              knownTechNames.add(configuredName);
-            }
-          }
-          for (const taskRow of maintenanceTasks) {
-            const assignedName = String(taskRow.assignedTechName || "").trim();
-            if (assignedName) {
-              knownTechNames.add(assignedName);
-            }
-          }
-          for (const techName of knownTechNames) {
-            const opt = document.createElement("option");
-            opt.value = techName;
-            opt.textContent = techName;
-            techSelect.appendChild(opt);
-          }
-          techSelect.value = task.assignedTechName || "";
-          const saveTechBtn = document.createElement("button");
-          saveTechBtn.type = "button";
-          saveTechBtn.className = "secondary";
-          saveTechBtn.style.marginTop = "8px";
-          saveTechBtn.textContent = "Save";
-          saveTechBtn.addEventListener("click", async () => {
-            setMsg(maintenanceTaskErr, "");
-            try {
-              await api(`/api/maintenance-automation/tasks/${task.id}/assign-tech`, {
-                method: "PATCH",
-                body: JSON.stringify({ assignedTechName: techSelect.value || null }),
-              });
-              await loadMaintenanceTasks();
-            } catch (e) {
-              setMsg(maintenanceTaskErr, String(e.message || e));
-            }
-          });
-          techCell.appendChild(techSelect);
-          techCell.appendChild(saveTechBtn);
-          tr.appendChild(techCell);
-
-          const statusCell = document.createElement("td");
-          statusCell.textContent = titleCaseWords(task.status || "");
-          tr.appendChild(statusCell);
-
-          const actionsCell = document.createElement("td");
-          const completeBtn = document.createElement("button");
-          completeBtn.type = "button";
-          completeBtn.textContent = "Complete";
-          completeBtn.disabled = String(task.status || "").toUpperCase() === "COMPLETED";
-          completeBtn.addEventListener("click", async () => {
-            setMsg(maintenanceTaskErr, "");
-            try {
-              await api(`/api/maintenance-automation/tasks/${task.id}/complete`, {
-                method: "POST",
-              });
-              await Promise.all([loadMaintenanceTasks(), loadInventory()]);
-            } catch (e) {
-              setMsg(maintenanceTaskErr, String(e.message || e));
-            }
-          });
-          actionsCell.appendChild(completeBtn);
-          tr.appendChild(actionsCell);
-
-          maintenanceTasksBody.appendChild(tr);
         }
       }
 
@@ -1134,14 +978,6 @@
       async function loadMaintenanceRules() {
         maintenanceRules = await api("/api/maintenance-automation/rules");
         renderMaintenanceRules();
-      }
-
-      async function loadMaintenanceTasks() {
-        const status = maintenanceTaskFilter.value || "open";
-        maintenanceTasks = await api(
-          `/api/maintenance-automation/tasks?status=${encodeURIComponent(status)}`,
-        );
-        renderMaintenanceTasks();
       }
 
       function openModal(m) { m.classList.add("open"); }
@@ -1665,7 +1501,7 @@
         await loadInspectionFormItems();
         renderInspectionAssignmentSummary();
         resetMaintenanceRuleForm();
-        await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+        await Promise.all([loadInventory(), loadMaintenanceRules()]);
       }
 
       $("admin-login").addEventListener("click", async () => {
@@ -1968,7 +1804,7 @@
             });
           }
           resetMaintenanceRuleForm();
-          await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+          await Promise.all([loadMaintenanceRules(), loadInventory()]);
         } catch (e) {
           setMsg(maintenanceRuleErr, String(e.message || e));
         }
@@ -1990,30 +1826,12 @@
         maintenanceRecheckAllBtn.textContent = "Rechecking...";
         try {
           await api("/api/maintenance-automation/recheck-all", { method: "POST" });
-          await Promise.all([loadMaintenanceRules(), loadMaintenanceTasks(), loadInventory()]);
+          await Promise.all([loadMaintenanceRules(), loadInventory()]);
         } catch (e) {
           setMsg(maintenanceRuleErr, String(e.message || e));
         } finally {
           maintenanceRecheckAllBtn.disabled = false;
           maintenanceRecheckAllBtn.textContent = originalText;
-        }
-      });
-
-      maintenanceTasksRefreshBtn.addEventListener("click", async () => {
-        setMsg(maintenanceTaskErr, "");
-        try {
-          await loadMaintenanceTasks();
-        } catch (e) {
-          setMsg(maintenanceTaskErr, String(e.message || e));
-        }
-      });
-
-      maintenanceTaskFilter.addEventListener("change", async () => {
-        setMsg(maintenanceTaskErr, "");
-        try {
-          await loadMaintenanceTasks();
-        } catch (e) {
-          setMsg(maintenanceTaskErr, String(e.message || e));
         }
       });
 
@@ -2048,7 +1866,7 @@
           await Promise.all([loadAssets(), loadInspectionAssetMappings(), loadInspectionForms()]);
           renderInspectionFormSelect();
           renderInspectionAssignmentSummary();
-          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+          await Promise.all([loadInventory(), loadMaintenanceRules()]);
         } catch (e) {
           setMsg(editAssetsErr, String(e.message || e));
         }
@@ -2255,7 +2073,7 @@
           invUnitNumber.value = "";
           invHours.value = "";
           closeModal(inventoryModal);
-          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+          await Promise.all([loadInventory(), loadMaintenanceRules()]);
         } catch (e) {
           setMsg(invErr, String(e.message || e));
         }
@@ -2282,7 +2100,7 @@
             body: JSON.stringify({ assetId, unitNumber, status, hours: parsedHours.value }),
           });
           closeModal(editModal);
-          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+          await Promise.all([loadInventory(), loadMaintenanceRules()]);
         } catch (e) {
           setMsg(editErr, String(e.message || e));
         }
@@ -2294,7 +2112,7 @@
         try {
           await api(`/api/inventory/${id}`, { method: "DELETE" });
           closeModal(editModal);
-          await Promise.all([loadInventory(), loadMaintenanceRules(), loadMaintenanceTasks()]);
+          await Promise.all([loadInventory(), loadMaintenanceRules()]);
         } catch (e) {
           setMsg(editErr, String(e.message || e));
         }

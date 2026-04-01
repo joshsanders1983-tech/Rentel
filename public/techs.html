@@ -108,6 +108,38 @@
       </div>
 
       <div class="card">
+        <h2>Due Services</h2>
+        <div class="sub">Track due service tasks, assign techs, and complete tasks after inspection submission.</div>
+        <div class="row buttons" style="margin-top:10px;">
+          <div style="min-width:180px;">
+            <label for="due-task-filter" class="inspect-label" style="display:block;margin-bottom:6px;">Task filter</label>
+            <select id="due-task-filter" class="field-input" style="max-width:220px;">
+              <option value="open">Open Tasks</option>
+              <option value="all">All Tasks</option>
+            </select>
+          </div>
+          <button class="btn secondary" id="due-tasks-refresh" type="button">Refresh Tasks</button>
+        </div>
+        <div id="due-task-error" class="msg" style="display:none;"></div>
+        <div id="due-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
+        <table style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th style="width:120px;">Unit</th>
+              <th style="width:120px;">Type</th>
+              <th>Rule</th>
+              <th style="width:150px;">Due / Current</th>
+              <th>Inspection Form</th>
+              <th style="width:200px;">Assigned Tech</th>
+              <th style="width:110px;">Status</th>
+              <th style="width:180px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="due-tasks-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
         <div class="row">
           <h2>Returned</h2>
           <div class="sub" id="returned-count">0 units</div>
@@ -307,6 +339,11 @@
       const serviceHistoryBody = $("service-history-body");
       const serviceHistoryEmpty = $("service-history-empty");
       const historyError = $("history-error");
+      const dueTaskFilter = $("due-task-filter");
+      const dueTasksRefreshBtn = $("due-tasks-refresh");
+      const dueTaskErr = $("due-task-error");
+      const dueTasksEmpty = $("due-tasks-empty");
+      const dueTasksBody = $("due-tasks-body");
       const needsAttentionSection = $("needs-attention-section");
       const needsAttentionDescription = $("needs-attention-description");
       const damagedSection = $("damaged-section");
@@ -332,6 +369,8 @@
       let activeInspectUnit = null;
       let activeCompleteUnit = null;
       let damagePhotoFiles = [];
+      let dueMaintenanceTasks = [];
+      let dueTechnicianDirectory = [];
       const INSPECTION_OPTION_DEFS = [
         { key: "ok", label: "Ok" },
         { key: "needsAttention", label: "Needs attention" },
@@ -441,6 +480,148 @@
       function sortedRows(rows) {
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
         return [...rows].sort((a, b) => collator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+      }
+
+      function titleCaseWords(value) {
+        return String(value ?? "")
+          .trim()
+          .toLowerCase()
+          .split(/[\s_]+/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ");
+      }
+
+      async function loadDueTechnicianDirectory() {
+        try {
+          const rows = await api("/api/tech-auth/technician-directory");
+          dueTechnicianDirectory = Array.isArray(rows) ? rows : [];
+        } catch (_e) {
+          dueTechnicianDirectory = [];
+        }
+      }
+
+      function renderDueMaintenanceTasks() {
+        dueTasksBody.innerHTML = "";
+        if (!dueMaintenanceTasks || dueMaintenanceTasks.length === 0) {
+          dueTasksEmpty.style.display = "block";
+          return;
+        }
+        dueTasksEmpty.style.display = "none";
+
+        for (const task of dueMaintenanceTasks) {
+          const tr = document.createElement("tr");
+
+          const unitCell = document.createElement("td");
+          unitCell.textContent = task.unitNumber || "-";
+          tr.appendChild(unitCell);
+
+          const typeCell = document.createElement("td");
+          typeCell.textContent = task.assetType || "-";
+          tr.appendChild(typeCell);
+
+          const ruleCell = document.createElement("td");
+          ruleCell.textContent = task.ruleName || task.reason || "-";
+          tr.appendChild(ruleCell);
+
+          const dueCurrentCell = document.createElement("td");
+          const metricSuffix = task.triggerType === "RENTAL_COUNT" ? "rentals" : "hrs";
+          dueCurrentCell.textContent = `${task.dueValue} ${metricSuffix} / ${task.currentValue} ${metricSuffix}`;
+          tr.appendChild(dueCurrentCell);
+
+          const formCell = document.createElement("td");
+          formCell.textContent = task.inspectionFormName || "Any inspection form";
+          tr.appendChild(formCell);
+
+          const techCell = document.createElement("td");
+          const techSelect = document.createElement("select");
+          techSelect.className = "field-input";
+          techSelect.style.maxWidth = "100%";
+          const noneOpt = document.createElement("option");
+          noneOpt.value = "";
+          noneOpt.textContent = "Unassigned";
+          techSelect.appendChild(noneOpt);
+          const knownTechNames = new Set();
+          for (const technician of dueTechnicianDirectory) {
+            const configuredName =
+              String(technician.techName || "").trim() ||
+              String(technician.username || "").trim();
+            if (configuredName) {
+              knownTechNames.add(configuredName);
+            }
+          }
+          for (const taskRow of dueMaintenanceTasks) {
+            const assignedName = String(taskRow.assignedTechName || "").trim();
+            if (assignedName) {
+              knownTechNames.add(assignedName);
+            }
+          }
+          for (const techName of knownTechNames) {
+            const opt = document.createElement("option");
+            opt.value = techName;
+            opt.textContent = techName;
+            techSelect.appendChild(opt);
+          }
+          techSelect.value = task.assignedTechName || "";
+          const saveTechBtn = document.createElement("button");
+          saveTechBtn.type = "button";
+          saveTechBtn.className = "btn secondary small";
+          saveTechBtn.style.marginTop = "8px";
+          saveTechBtn.textContent = "Save";
+          saveTechBtn.addEventListener("click", async () => {
+            setMsg(dueTaskErr, "");
+            try {
+              await api(`/api/maintenance-automation/tasks/${task.id}/assign-tech`, {
+                method: "PATCH",
+                body: JSON.stringify({ assignedTechName: techSelect.value || null }),
+              });
+              await loadDueMaintenanceTasks();
+            } catch (e) {
+              setMsg(dueTaskErr, String(e.message || e));
+            }
+          });
+          techCell.appendChild(techSelect);
+          techCell.appendChild(saveTechBtn);
+          tr.appendChild(techCell);
+
+          const statusCell = document.createElement("td");
+          statusCell.textContent = titleCaseWords(task.status || "");
+          tr.appendChild(statusCell);
+
+          const actionsCell = document.createElement("td");
+          const completeBtn = document.createElement("button");
+          completeBtn.type = "button";
+          completeBtn.className = "btn small";
+          completeBtn.textContent = "Complete";
+          completeBtn.disabled = String(task.status || "").toUpperCase() === "COMPLETED";
+          completeBtn.addEventListener("click", async () => {
+            setMsg(dueTaskErr, "");
+            try {
+              await api(`/api/maintenance-automation/tasks/${task.id}/complete`, {
+                method: "POST",
+              });
+              await Promise.all([loadDueMaintenanceTasks(), loadMaintenance()]);
+            } catch (e) {
+              setMsg(dueTaskErr, String(e.message || e));
+            }
+          });
+          actionsCell.appendChild(completeBtn);
+          tr.appendChild(actionsCell);
+
+          dueTasksBody.appendChild(tr);
+        }
+      }
+
+      async function loadDueMaintenanceTasks() {
+        const status = dueTaskFilter.value || "open";
+        dueMaintenanceTasks = await api(
+          `/api/maintenance-automation/tasks?status=${encodeURIComponent(status)}`,
+        );
+        renderDueMaintenanceTasks();
+      }
+
+      async function refreshMaintenanceAndDueTasks() {
+        await Promise.all([loadMaintenance(), loadDueMaintenanceTasks()]);
       }
 
       function renderRepairHistoryRows(entries) {
@@ -898,7 +1079,7 @@
 
           resetManualDownForm();
           setMsg(manualDownSuccess, `Unit ${unitNumber} moved to Down.`);
-          await loadMaintenance();
+          await refreshMaintenanceAndDueTasks();
         } finally {
           manualDownSubmit.disabled = false;
           manualDownSubmit.textContent = originalText;
@@ -930,7 +1111,7 @@
             body: JSON.stringify({ hours: parsedHours }),
           });
           closeModal("complete-modal-backdrop");
-          await loadMaintenance();
+          await refreshMaintenanceAndDueTasks();
         } finally {
           completeSubmit.disabled = false;
           completeSubmit.textContent = originalText;
@@ -1034,7 +1215,7 @@
             }),
           });
           closeModal("inspect-modal-backdrop");
-          await loadMaintenance();
+          await refreshMaintenanceAndDueTasks();
         } finally {
           inspectSubmit.disabled = false;
           inspectSubmit.textContent = originalSubmitText;
@@ -1097,9 +1278,33 @@
         if (event.target === $("history-modal-backdrop")) closeModal("history-modal-backdrop");
       });
 
-      Promise.all([loadTechSession(), loadMaintenance()]).catch((e) =>
-        setMsg(maintenanceError, "Failed to load maintenance units: " + String(e.message || e)),
-      );
+      dueTasksRefreshBtn.addEventListener("click", async () => {
+        setMsg(dueTaskErr, "");
+        try {
+          await loadDueMaintenanceTasks();
+        } catch (e) {
+          setMsg(dueTaskErr, String(e.message || e));
+        }
+      });
+
+      dueTaskFilter.addEventListener("change", async () => {
+        setMsg(dueTaskErr, "");
+        try {
+          await loadDueMaintenanceTasks();
+        } catch (e) {
+          setMsg(dueTaskErr, String(e.message || e));
+        }
+      });
+
+      (async () => {
+        try {
+          await loadTechSession();
+          await loadDueTechnicianDirectory();
+          await Promise.all([loadMaintenance(), loadDueMaintenanceTasks()]);
+        } catch (e) {
+          setMsg(maintenanceError, "Failed to load maintenance units: " + String(e.message || e));
+        }
+      })();
     </script>
   </body>
 </html>

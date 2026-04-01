@@ -8,6 +8,7 @@ import {
   deleteTechnician,
   getTechSession,
   listTechnicians,
+  requireTech,
   setTechSessionCookie,
   updateTechnician,
 } from "../lib/techAuth.js";
@@ -53,6 +54,18 @@ apiTechAuthRouter.post("/logout", (req, res) => {
 apiTechAuthRouter.get("/technicians", requireAdmin, async (_req, res) => {
   const technicians = await listTechnicians();
   res.json(technicians);
+});
+
+/** Display names for maintenance task assignment (no passwords). */
+apiTechAuthRouter.get("/technician-directory", requireTech, async (_req, res) => {
+  const technicians = await listTechnicians();
+  res.json(
+    technicians.map((t) => ({
+      id: t.id,
+      techName: t.techName,
+      username: t.username,
+    })),
+  );
 });
 
 apiTechAuthRouter.post("/technicians", requireAdmin, async (req, res) => {

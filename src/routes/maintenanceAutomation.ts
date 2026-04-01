@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
-import { requireAdmin } from "../lib/adminAuth.js";
+import { isAdminAuthenticated, requireAdmin } from "../lib/adminAuth.js";
+import { isTechAuthenticated } from "../lib/techAuth.js";
 import {
   ensureMaintenanceAutomationSchema,
   evaluateMaintenanceRulesForAllUnits,
@@ -12,6 +14,14 @@ import {
 import { prisma } from "../lib/prisma.js";
 
 export const apiMaintenanceAutomationRouter = Router();
+
+function requireTechOrAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (isTechAuthenticated(req) || isAdminAuthenticated(req)) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: "Tech or admin authentication required." });
+}
 
 type TriggerType = "HOURS" | "RENTAL_COUNT";
 type ScopeType = "ALL_UNITS" | "ASSET_TYPES" | "SPECIFIC_UNITS";
@@ -622,7 +632,7 @@ apiMaintenanceAutomationRouter.get("/tasks", async (req, res) => {
 
 apiMaintenanceAutomationRouter.patch(
   "/tasks/:id/assign-tech",
-  requireAdmin,
+  requireTechOrAdmin,
   async (req, res) => {
     await ensureMaintenanceAutomationSchema();
     const taskId = typeof req.params.id === "string" ? req.params.id.trim() : "";
@@ -638,7 +648,7 @@ apiMaintenanceAutomationRouter.patch(
   },
 );
 
-apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireAdmin, async (req, res) => {
+apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireTechOrAdmin, async (req, res) => {
   await ensureMaintenanceAutomationSchema();
   const taskId = typeof req.params.id === "string" ? req.params.id.trim() : "";
   if (!taskId) {
