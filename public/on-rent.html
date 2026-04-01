@@ -199,6 +199,13 @@
         return Array.isArray(entry.assignedUnits) ? entry.assignedUnits : [];
       }
 
+      function unitInventoryId(unit) {
+        if (!unit || typeof unit !== "object") return "";
+        const raw = unit.unitId != null ? unit.unitId : unit.id;
+        if (raw === null || raw === undefined) return "";
+        return String(raw).trim();
+      }
+
       function toDisplayRows(entries) {
         const rows = [];
         for (const entry of entries || []) {
@@ -281,7 +288,7 @@
           const batchKey = onRentBatchKey(entry);
           const unitType = unit ? unit.type : "-";
           const unitNumber = unit ? unit.unitNumber : "-";
-          const unitId = unit ? unit.unitId : "";
+          const unitId = unit ? unitInventoryId(unit) : "";
 
           const tr = document.createElement("tr");
           tr.innerHTML = `
@@ -297,7 +304,7 @@
             <td>
               <div class="actions">
                 <button class="btn danger small js-end-now" type="button">End Now</button>
-                <button class="btn secondary small js-swap" type="button" data-unit-id="${escapeHtml(unitId)}" data-unit-number="${escapeHtml(unitNumber)}" ${unit ? "" : "disabled"}>Swap Unit</button>
+                <button class="btn secondary small js-swap" type="button" data-unit-id="${escapeHtml(unitId)}" data-unit-number="${escapeHtml(unitNumber)}" ${unitId ? "" : "disabled"}>Swap Unit</button>
               </div>
             </td>
           `;
@@ -313,8 +320,12 @@
 
           tr.querySelector(".js-end-now").addEventListener("click", () => openEndNowModal(entry.id));
           tr.querySelector(".js-swap").addEventListener("click", () => {
-            if (!unit) return;
-            openSwapModal(entry.id, unit.unitId, unit.unitNumber);
+            const removeUnitId = unitInventoryId(unit);
+            if (!unit || !removeUnitId) {
+              setMsg("Unable to swap this row: assigned unit id is missing.");
+              return;
+            }
+            openSwapModal(entry.id, removeUnitId, unit.unitNumber);
           });
 
           body.appendChild(tr);

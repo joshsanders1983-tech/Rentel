@@ -331,8 +331,7 @@ apiReservationsRouter.post("/returned/:id/restore", async (req, res) => {
 apiReservationsRouter.post("/on-rent/:id/swap-unit", async (req, res) => {
   const { id } = req.params;
   const body = req.body as Record<string, unknown>;
-  const removeUnitId =
-    typeof body.removeUnitId === "string" ? body.removeUnitId.trim() : "";
+  const removeUnitId = parseSwapUnitId(body.removeUnitId);
   const addUnitNumber =
     typeof body.addUnitNumber === "string" ? body.addUnitNumber.trim() : "";
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
