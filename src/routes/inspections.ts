@@ -809,28 +809,33 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
 
     return { unit: updated, inspectionSubmissionId: submission.id };
   });
-  await appendRepairHistoryEntry({
-    inventoryId,
-    action: nextInventoryStatus === STATUS_DOWN ? "DOWN" : "COMPLETE",
-    details:
-      nextInventoryStatus === STATUS_DOWN
-        ? downReason || "Inspection result moved this unit to Down."
-        : "Inspection completed and unit returned to Available.",
-    techName: actorName || null,
-    repairHours:
-      nextInventoryStatus === STATUS_AVAILABLE && hourMeterReading !== null
-        ? hourMeterReading
-        : null,
-    createdAt: submittedAt,
-  });
-  await completeOpenMaintenanceTasksForInspection(
-    inventoryId,
-    inspectionResult.inspectionSubmissionId,
-    form.id,
-    submittedAtIso,
-    serviceStateOpts,
-  );
-  await evaluateMaintenanceRulesForUnits([inventoryId], serviceStateOpts);
+
+  try {
+    await appendRepairHistoryEntry({
+      inventoryId,
+      action: nextInventoryStatus === STATUS_DOWN ? "DOWN" : "COMPLETE",
+      details:
+        nextInventoryStatus === STATUS_DOWN
+          ? downReason || "Inspection result moved this unit to Down."
+          : "Inspection completed and unit returned to Available.",
+      techName: actorName || null,
+      repairHours:
+        nextInventoryStatus === STATUS_AVAILABLE && hourMeterReading !== null
+          ? hourMeterReading
+          : null,
+      createdAt: submittedAt,
+    });
+    await completeOpenMaintenanceTasksForInspection(
+      inventoryId,
+      inspectionResult.inspectionSubmissionId,
+      form.id,
+      submittedAtIso,
+      serviceStateOpts,
+    );
+    await evaluateMaintenanceRulesForUnits([inventoryId], serviceStateOpts);
+  } catch (err) {
+    console.error("[inspections] POST /inventory/:inventoryId/complete side effects failed:", err);
+  }
 
   invalidateInventoryCache();
 
@@ -842,7 +847,11 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
   const unitStatus = normalizeStatus(unit.status);
 
   if (unitStatus === STATUS_AVAILABLE) {
-    await removeReturnedOnRentUnit(inventoryId);
+    try {
+      await removeReturnedOnRentUnit(inventoryId);
+    } catch (err) {
+      console.error("[inspections] removeReturnedOnRentUnit failed:", err);
+    }
   }
 
   res.json({

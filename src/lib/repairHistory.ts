@@ -66,7 +66,7 @@ async function ensureRepairHistorySchema(): Promise<void> {
   try {
     await run(`
       ALTER TABLE "RepairHistoryEntry"
-      ADD COLUMN IF NOT EXISTS "laborHours" REAL
+      ADD COLUMN "laborHours" REAL
     `);
   } catch (error) {
     if (!isDuplicateColumnError(error)) {
