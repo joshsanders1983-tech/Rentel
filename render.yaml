@@ -1,7 +1,6 @@
 # Render Web Service — Express app at repo root (no subfolder).
-# Root Directory: leave empty. Set DATABASE_URL, DIRECT_URL, and ADMIN_PASSWORD in the dashboard.
-# Use Supabase Supavisor pooler URLs (IPv4-safe). See .env.example and README.
-# preDeploy runs prisma migrate — needs DIRECT_URL + DATABASE_URL at deploy time.
+# Root Directory: leave empty (repo root — not "src"). Set DATABASE_URL + ADMIN_PASSWORD in the dashboard.
+# DATABASE_URL = Supabase Connect → Session pooler only (IPv4-safe). See .env.example.
 
 services:
   - type: web
@@ -15,8 +14,6 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
-      - key: DIRECT_URL
         sync: false
       - key: ADMIN_PASSWORD
         sync: false

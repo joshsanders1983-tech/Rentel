@@ -82,8 +82,7 @@ if (-not (Test-Path $envFile)) {
 }
 
 $dbUrl = Get-EnvValue $envFile "DATABASE_URL"
-$directUrl = Get-EnvValue $envFile "DIRECT_URL"
-if ((Test-NeedsDatabaseUrl $dbUrl) -or (Test-NeedsDatabaseUrl $directUrl)) {
+if (Test-NeedsDatabaseUrl $dbUrl) {
   Write-Title "Step 1 — Create a Supabase project (free tier is fine)"
   Write-Host "  I cannot log in for you. Do this once in your browser:"
   Write-Host ""
@@ -96,36 +95,20 @@ if ((Test-NeedsDatabaseUrl $dbUrl) -or (Test-NeedsDatabaseUrl $directUrl)) {
     Start-Process "https://supabase.com/dashboard"
   }
 
-  Write-Title "Step 2 — Copy two pooler URLs (Supavisor — works on IPv4 and Render)"
-  Write-Host "  In Supabase open your project -> top bar **Connect** -> **Connection String**."
-  Write-Host "  You need both pooler strings (host: aws-0-<region>.pooler.supabase.com), NOT the direct db.* host only."
+  Write-Title "Step 2 — Session pooler connection string (IPv4-safe for Render)"
+  Write-Host "  In Supabase: open your project -> **Connect** -> **Connection string** -> **Session pooler**."
+  Write-Host "  Host should look like aws-0-<region>.pooler.supabase.com and port **5432** (not db.*.supabase.co only)."
   Write-Host ""
-  Write-Host "  A) Session pooler — port **5432** -> paste below (saved as DIRECT_URL for migrations)."
-  $session = Read-Host "Paste Session pooler URI"
-  $session = $session.Trim().Trim('"')
-  if ([string]::IsNullOrWhiteSpace($session)) {
-    Write-Host "No URL entered. Set DIRECT_URL in .env and run this script again." -ForegroundColor Red
-    exit 1
-  }
-  Set-EnvValue $envFile "DIRECT_URL" $session
-  Write-Host "Saved DIRECT_URL."
-  Write-Host ""
-  Write-Host "  B) Transaction pooler — port **6543** -> paste below (saved as DATABASE_URL for the app)."
-  $tx = Read-Host "Paste Transaction pooler URI"
-  $tx = $tx.Trim().Trim('"')
-  if ([string]::IsNullOrWhiteSpace($tx)) {
+  $paste = Read-Host "Paste the full Session pooler URI here"
+  $paste = $paste.Trim().Trim('"')
+  if ([string]::IsNullOrWhiteSpace($paste)) {
     Write-Host "No URL entered. Set DATABASE_URL in .env and run this script again." -ForegroundColor Red
     exit 1
   }
-  if ($tx -match ":6543" -and $tx -notmatch "pgbouncer=true") {
-    $sep = "?"; if ($tx -match "\?") { $sep = "&" }
-    $tx = "$tx${sep}pgbouncer=true"
-    Write-Host "Appended pgbouncer=true for Prisma + transaction pool."
-  }
-  Set-EnvValue $envFile "DATABASE_URL" $tx
+  Set-EnvValue $envFile "DATABASE_URL" $paste
   Write-Host "Saved DATABASE_URL."
 } else {
-  Write-Host "DATABASE_URL and DIRECT_URL in .env look configured; skipping paste step."
+  Write-Host "DATABASE_URL in .env looks configured; skipping paste step."
 }
 
 $adminPw = Get-EnvValue $envFile "ADMIN_PASSWORD"
@@ -151,9 +134,9 @@ try {
   if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "If this failed:" -ForegroundColor Yellow
-    Write-Host "  - Confirm passwords in DATABASE_URL and DIRECT_URL match Supabase (reset in Project Settings -> Database)."
-    Write-Host "  - Use Supavisor pooler URLs from Connect (see .env.example); direct db.*:5432 alone can fail on IPv4-only networks."
-    Write-Host "  - See: https://supabase.com/docs/guides/database/prisma"
+    Write-Host "  - Confirm the password in DATABASE_URL matches Supabase (reset in Project Settings -> Database)."
+    Write-Host "  - Use Session pooler from Connect (see .env.example); bare db.*.supabase.co can fail on IPv4-only networks."
+    Write-Host "  - See: https://supabase.com/docs/guides/database/connecting-to-postgres"
     exit 1
   }
 
@@ -164,7 +147,7 @@ try {
   Write-Host "  Or:  npm run dev"
   Write-Host "  Then open http://localhost:4000"
   Write-Host ""
-  Write-Host "  Give every teammate the same DATABASE_URL and DIRECT_URL in their .env so data stays in sync."
+  Write-Host "  Give every teammate the same DATABASE_URL in their .env so data stays in sync."
   Write-Host ""
 } finally {
   Pop-Location

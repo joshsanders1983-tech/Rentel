@@ -11,18 +11,17 @@ You need **[Node.js LTS](https://nodejs.org/)** installed. The script walks you 
 3. Follow the prompts: create a project on [Supabase](https://supabase.com/dashboard), paste the **Database URI** when asked, then the script runs `npm install` and applies migrations to your cloud database.
 4. Start the app with **`Launch-Rentel-Dev.cmd`** or `npm run dev` in the repo root, and open [http://localhost:4000](http://localhost:4000).
 
-Use the **same** **`DATABASE_URL`** and **`DIRECT_URL`** in **`.env`** on every computer so everyone shares one database.
+Use the **same** **`DATABASE_URL`** in **`.env`** on every computer so everyone shares one database.
 
 ### Using Supabase as the database
 
-**Supabase is PostgreSQL.** This app stores all persistent data in your Supabase Postgres database using **Prisma** with two connection strings in **`.env`** (see **`.env.example`**). You do **not** need the Supabase JavaScript client (`@supabase/supabase-js`) for normal reads/writes—that is only for features like Supabase Auth, Storage, or Realtime built against Supabase’s APIs.
+**Supabase is PostgreSQL.** This app stores all persistent data in your Supabase Postgres database using **Prisma** and a single **`DATABASE_URL`** in **`.env`** (see **`.env.example`**). You do **not** need the Supabase JavaScript client (`@supabase/supabase-js`) for normal reads/writes—that is only for features like Supabase Auth, Storage, or Realtime built against Supabase’s APIs.
 
-**Connection strings (important):** Supabase’s **direct** host `db.<project>.supabase.co:5432` is often **IPv6-only**. Hosts that only use IPv4 outbound (including **Render**) cannot reach it. Use the **Supavisor pooler** strings from the dashboard **Connect** button instead—**Session** (port **5432**) and **Transaction** (port **6543**). Prisma is configured per the [Supabase + Prisma guide](https://supabase.com/docs/guides/database/prisma): **`DIRECT_URL`** = session pooler (migrations), **`DATABASE_URL`** = transaction pooler with **`?pgbouncer=true`** (app runtime).
+**Connection string (important):** Supabase’s **direct** host `db.<project>.supabase.co:5432` is often **IPv6-only**. Hosts that only use IPv4 outbound (including **Render**) cannot reach it. Use the **Session pooler** URI from **Connect** (host like `aws-0-….pooler.supabase.com`, port **5432**). One variable is enough for both the app and **`prisma migrate`**.
 
-1. In [Supabase](https://supabase.com/dashboard), open your project → **Connect** → **Connection string**.
-2. Copy the **Session pooler** URI → **`DIRECT_URL`** in **`.env`**.
-3. Copy the **Transaction pooler** URI → **`DATABASE_URL`**, and ensure the query string includes **`pgbouncer=true`** (the setup script adds it if missing).
-4. Run **`npm run db:deploy`** once (or use **`Setup-Rentel.cmd`**) so tables are created in Supabase.
+1. In [Supabase](https://supabase.com/dashboard), open your project → **Connect** → **Connection string** → **Session pooler**.
+2. Copy the URI into **`DATABASE_URL`** in **`.env`** (replace the password placeholder with your real database password).
+3. Run **`npm run db:deploy`** once (or use **`Setup-Rentel.cmd`**) so tables are created in Supabase.
 
 **Copy old data from `dev.db` into Supabase:** If you still have a local SQLite file (`prisma/dev.db` or `dev.db`) from before you switched to Postgres, run `npm run migrate:from-sqlite`. If Supabase already has Rentel rows you want to **replace**, run `npm run migrate:from-sqlite -- --force` (this deletes existing Rentel data in Supabase first). Optional: pass the path to your `.db` file as the last argument. Then restart the app.
 
@@ -32,7 +31,7 @@ Use the **same** **`DATABASE_URL`** and **`DIRECT_URL`** in **`.env`** on every 
 
 1. Open a terminal in the **repo root**.
 2. **`npm install`**
-3. Copy **`.env.example`** to **`.env`** and set **`DATABASE_URL`**, **`DIRECT_URL`**, and **`ADMIN_PASSWORD`**.
+3. Copy **`.env.example`** to **`.env`** and set **`DATABASE_URL`** (Session pooler from Supabase **Connect**) and **`ADMIN_PASSWORD`**.
 4. **`npm run db:deploy`**
 5. **`npm run dev`** (or **`npm run build`** then **`npm start`**)
 6. Open [http://localhost:4000](http://localhost:4000)
@@ -40,11 +39,11 @@ Use the **same** **`DATABASE_URL`** and **`DIRECT_URL`** in **`.env`** on every 
 ## Deploy on Render
 
 1. Create a **Web Service** from this GitHub repo (or connect **`render.yaml`** as a Blueprint).
-2. **Root Directory:** leave **empty** (repository root).
+2. **Root Directory:** leave **empty** (repository root — **not** `src`, or paths and env loading break).
 3. **Build Command:** `npm ci && npm run build`
-4. **Pre-Deploy Command:** `npm run db:deploy` (applies Prisma migrations; requires **`DATABASE_URL`** and **`DIRECT_URL`**)
+4. **Pre-Deploy Command:** `npm run db:deploy`
 5. **Start Command:** `npm start`
-6. **Environment:** **`DATABASE_URL`** (transaction pooler, port **6543**), **`DIRECT_URL`** (session pooler, port **5432**), **`ADMIN_PASSWORD`** (and optional Supabase keys as above). Do **not** use only the direct `db.*.supabase.co:5432` URL from older docs—it often fails from Render (IPv4).
+6. **Environment:** **`DATABASE_URL`** = Supabase **Connect → Session pooler** URI (port **5432**, pooler host). **`ADMIN_PASSWORD`**. You can **delete** any **`DIRECT_URL`** variable left over from older instructions. Do **not** use the bare direct `db.*.supabase.co:5432` URL if Render cannot reach the database (use the pooler URI instead).
 
 After deploy, open your **`https://….onrender.com`** URL. **`GET /health`** should return `"ok": true`.
 

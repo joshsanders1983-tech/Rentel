@@ -3,11 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // App queries: Supabase Supavisor transaction pool (port 6543) + ?pgbouncer=true — see .env.example
-  url       = env("DATABASE_URL")
-  // Migrations / introspection: Supavisor session pool (port 5432) on pooler host — IPv4-safe (Render, etc.)
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  // One URL: Supabase "Session pooler" from Connect (host aws-0-*.pooler.supabase.com:5432). IPv4-safe for Render.
+  url      = env("DATABASE_URL")
 }
 
 /// Asset "types" used to rent units.
