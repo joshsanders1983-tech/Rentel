@@ -795,9 +795,12 @@
         }
       }
 
-      function isDamageEntry(entry) {
-        const details = String(entry && entry.details ? entry.details : "").toLowerCase();
-        return details.includes("damaged");
+      /** Inspection downs use "Damaged: …" (server-side). Avoid matching "undamaged" etc. */
+      function isDamageInspectionDownEntry(entry) {
+        const action = String(entry && entry.action ? entry.action : "").trim().toUpperCase();
+        if (action !== "DOWN") return false;
+        const details = String(entry && entry.details ? entry.details : "");
+        return /(^|[|\n])\s*Damaged\s*:/i.test(details);
       }
 
       function renderDamageHistoryRows(entries) {
@@ -1127,9 +1130,12 @@
         }
 
         if (results[1].status === "fulfilled") {
-          const damageEntries = repairEntries.filter((entry) => isDamageEntry(entry));
+          const damageEntries = repairEntries.filter((entry) => isDamageInspectionDownEntry(entry));
+          const repairTimelineEntries = repairEntries.filter(
+            (entry) => !isDamageInspectionDownEntry(entry),
+          );
           renderDamageHistoryRows(damageEntries);
-          renderRepairHistoryRows(repairEntries);
+          renderRepairHistoryRows(repairTimelineEntries);
         } else {
           damageHistoryBody.innerHTML = "";
           historyBody.innerHTML = "";
