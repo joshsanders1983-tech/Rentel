@@ -1349,6 +1349,8 @@
           });
           closeModal("inspect-modal-backdrop");
           await refreshMaintenanceAndDueTasks();
+        } catch (e) {
+          setMsg(inspectError, e instanceof Error ? e.message : String(e));
         } finally {
           inspectSubmit.disabled = false;
           inspectSubmit.textContent = originalSubmitText;

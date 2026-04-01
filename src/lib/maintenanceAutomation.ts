@@ -136,6 +136,9 @@ export async function ensureMaintenanceAutomationSchema(): Promise<void> {
       FOREIGN KEY ("inspectionFormId") REFERENCES "InspectionForm"("id") ON DELETE SET NULL
     )
   `);
+  await run(`
+    ALTER TABLE "MaintenanceRule" ADD COLUMN IF NOT EXISTS "inspectionFormId" TEXT NULL
+  `);
 
   await run(`
     CREATE TABLE IF NOT EXISTS "MaintenanceRuleAssetScope" (
@@ -181,6 +184,21 @@ export async function ensureMaintenanceAutomationSchema(): Promise<void> {
       FOREIGN KEY ("completionInspectionSubmissionId") REFERENCES "InspectionSubmission"("id") ON DELETE SET NULL,
       UNIQUE ("ruleId", "inventoryId", "triggerType", "dueValue")
     )
+  `);
+
+  // `CREATE TABLE IF NOT EXISTS` does not add new columns to existing tables. Inspection completion
+  // updates "completionInspectionSubmissionId" / "completedAt"; missing columns caused 500s on older DBs.
+  await run(`
+    ALTER TABLE "MaintenanceTask" ADD COLUMN IF NOT EXISTS "inspectionFormId" TEXT NULL
+  `);
+  await run(`
+    ALTER TABLE "MaintenanceTask" ADD COLUMN IF NOT EXISTS "assignedTechName" TEXT NULL
+  `);
+  await run(`
+    ALTER TABLE "MaintenanceTask" ADD COLUMN IF NOT EXISTS "completedAt" TEXT NULL
+  `);
+  await run(`
+    ALTER TABLE "MaintenanceTask" ADD COLUMN IF NOT EXISTS "completionInspectionSubmissionId" TEXT NULL
   `);
 }
 
