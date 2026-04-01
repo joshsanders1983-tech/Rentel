@@ -541,53 +541,69 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
 });
 
 apiInventoryRouter.get("/:id/repair-history", requireTech, async (req, res) => {
-  const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
-  if (!id) {
-    res.status(400).json({ error: "Invalid inventory id." });
-    return;
-  }
+  try {
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: "Invalid inventory id." });
+      return;
+    }
 
-  const inventory = await prisma.inventory.findUnique({
-    where: { id },
-    include: { asset: true },
-  });
-  if (!inventory) {
-    res.status(404).json({ error: "Inventory unit not found." });
-    return;
-  }
+    const inventory = await prisma.inventory.findUnique({
+      where: { id },
+      include: { asset: true },
+    });
+    if (!inventory) {
+      res.status(404).json({ error: "Inventory unit not found." });
+      return;
+    }
 
-  const entries = await getRepairHistoryEntries(id, 200);
-  res.json({
-    inventoryId: inventory.id,
-    unitNumber: inventory.unitNumber,
-    assetType: inventory.asset?.type ?? null,
-    entries,
-  });
+    const entries = await getRepairHistoryEntries(id, 200);
+    res.json({
+      inventoryId: inventory.id,
+      unitNumber: inventory.unitNumber,
+      assetType: inventory.asset?.type ?? null,
+      entries,
+    });
+  } catch (err) {
+    console.error("[inventory] GET /:id/repair-history failed:", err);
+    res.status(500).json({ error: "Failed to load repair history." });
+  }
 });
 
 apiInventoryRouter.get("/:id/service-history", requireTech, async (req, res) => {
   const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
-  if (!id) {
-    res.status(400).json({ error: "Invalid inventory id." });
-    return;
-  }
+  try {
+    if (!id) {
+      res.status(400).json({ error: "Invalid inventory id." });
+      return;
+    }
 
-  const inventory = await prisma.inventory.findUnique({
-    where: { id },
-    include: { asset: true },
-  });
-  if (!inventory) {
-    res.status(404).json({ error: "Inventory unit not found." });
-    return;
-  }
+    const inventory = await prisma.inventory.findUnique({
+      where: { id },
+      include: { asset: true },
+    });
+    if (!inventory) {
+      res.status(404).json({ error: "Inventory unit not found." });
+      return;
+    }
 
-  const entries = await getServiceHistoryEntries(id, 200);
-  res.json({
-    inventoryId: inventory.id,
-    unitNumber: inventory.unitNumber,
-    assetType: inventory.asset?.type ?? null,
-    entries,
-  });
+    const entries = await getServiceHistoryEntries(id, 200);
+    res.json({
+      inventoryId: inventory.id,
+      unitNumber: inventory.unitNumber,
+      assetType: inventory.asset?.type ?? null,
+      entries,
+    });
+  } catch (err) {
+    console.error("[inventory] GET /:id/service-history failed:", err);
+    // Keep Unit History usable even when service-history storage is not ready.
+    res.json({
+      inventoryId: id,
+      unitNumber: null,
+      assetType: null,
+      entries: [],
+    });
+  }
 });
 
 apiInventoryRouter.delete("/:id", requireAdmin, async (req, res) => {
