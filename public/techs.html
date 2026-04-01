@@ -67,6 +67,7 @@
       }
       .techs-side-card { max-width:none !important; width:100%; min-width:0; }
       .techs-side-card .due-services-table-wrap { overflow-x:auto; margin-top:10px; -webkit-overflow-scrolling:touch; }
+      .mobile-cards-table {}
       @media (max-width: 900px) {
         .techs-two-col { grid-template-columns: 1fr; }
       }
@@ -85,6 +86,12 @@
       @media (max-width: 560px) {
         .brand { flex-direction:column; align-items:flex-start; }
         .brand-logo { height:64px; }
+        table.mobile-cards-table thead { display:none; }
+        table.mobile-cards-table, table.mobile-cards-table tbody, table.mobile-cards-table tr, table.mobile-cards-table td { display:block; width:100%; }
+        table.mobile-cards-table tr { border:1px solid var(--border); border-radius:10px; margin-bottom:10px; padding:8px; background:#141d28; }
+        table.mobile-cards-table td { border-bottom:1px solid rgba(42,54,71,.6); padding:8px 6px; }
+        table.mobile-cards-table td:last-child { border-bottom:0; }
+        table.mobile-cards-table td::before { content: attr(data-label); display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
       }
     </style>
   </head>
@@ -124,7 +131,7 @@
           <div class="sub" id="returned-count">0 units</div>
         </div>
         <div id="returned-empty" class="empty" style="display:none;">No returned units found.</div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:160px;">Unit Number</th>
@@ -145,7 +152,7 @@
           <div class="sub" id="down-count">0 units</div>
         </div>
         <div id="down-empty" class="empty" style="display:none;">No down units found.</div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:160px;">Unit Number</th>
@@ -216,7 +223,7 @@
           <div id="due-task-error" class="msg" style="display:none;"></div>
           <div id="due-tasks-empty" class="empty" style="display:none; margin-top:10px;">No service tasks found.</div>
           <div class="due-services-table-wrap">
-            <table style="margin-top:10px; min-width:640px;">
+            <table class="mobile-cards-table" style="margin-top:10px; min-width:640px;">
               <thead>
                 <tr>
                   <th style="width:120px;">Unit</th>
@@ -308,7 +315,7 @@
         <h3 id="history-modal-title">History</h3>
         <h4 class="history-subheading" style="margin:0.75rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Damage history</h4>
         <div id="damage-history-empty" class="empty" style="display:none;"></div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:200px;">Date</th>
@@ -321,7 +328,7 @@
         </table>
         <h4 class="history-subheading" style="margin:0.75rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Repair history</h4>
         <div id="history-empty" class="empty" style="display:none;"></div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:200px;">Date</th>
@@ -335,7 +342,7 @@
         </table>
         <h4 class="history-subheading" style="margin:1rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Service history</h4>
         <div id="service-history-empty" class="empty" style="display:none;"></div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:200px;">Date</th>
@@ -524,6 +531,15 @@
           .replaceAll("'", "&#039;");
       }
 
+      function setCellLabel(cell, label) {
+        if (cell && label) cell.setAttribute("data-label", label);
+      }
+
+      function applyMobileLabels(tr, labels) {
+        const cells = tr.querySelectorAll("td");
+        cells.forEach((cell, index) => setCellLabel(cell, labels[index] || ""));
+      }
+
       function sortedRows(rows) {
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
         return [...rows].sort((a, b) => collator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
@@ -561,23 +577,28 @@
 
           const unitCell = document.createElement("td");
           unitCell.textContent = task.unitNumber || "-";
+          setCellLabel(unitCell, "Unit");
           tr.appendChild(unitCell);
 
           const typeCell = document.createElement("td");
           typeCell.textContent = task.assetType || "-";
+          setCellLabel(typeCell, "Type");
           tr.appendChild(typeCell);
 
           const ruleCell = document.createElement("td");
           ruleCell.textContent = task.ruleName || task.reason || "-";
+          setCellLabel(ruleCell, "Rule");
           tr.appendChild(ruleCell);
 
           const dueCurrentCell = document.createElement("td");
           const metricSuffix = task.triggerType === "RENTAL_COUNT" ? "rentals" : "hrs";
           dueCurrentCell.textContent = `${task.dueValue} ${metricSuffix} / ${task.currentValue} ${metricSuffix}`;
+          setCellLabel(dueCurrentCell, "Due / Current");
           tr.appendChild(dueCurrentCell);
 
           const formCell = document.createElement("td");
           formCell.textContent = task.inspectionFormName || "Any inspection form";
+          setCellLabel(formCell, "Inspection Form");
           tr.appendChild(formCell);
 
           const techCell = document.createElement("td");
@@ -629,10 +650,12 @@
           });
           techCell.appendChild(techSelect);
           techCell.appendChild(saveTechBtn);
+          setCellLabel(techCell, "Assigned Tech");
           tr.appendChild(techCell);
 
           const statusCell = document.createElement("td");
           statusCell.textContent = titleCaseWords(task.status || "");
+          setCellLabel(statusCell, "Status");
           tr.appendChild(statusCell);
 
           const actionsCell = document.createElement("td");
@@ -653,6 +676,7 @@
             }
           });
           actionsCell.appendChild(completeBtn);
+          setCellLabel(actionsCell, "Actions");
           tr.appendChild(actionsCell);
 
           dueTasksBody.appendChild(tr);
@@ -689,6 +713,7 @@
             <td>${escapeHtml(entry.details ?? "-")}</td>
             <td>${escapeHtml(entry.techName ?? "-")}</td>
           `;
+          applyMobileLabels(tr, ["Date", "Action", "Hours", "Details", "Tech"]);
           historyBody.appendChild(tr);
         }
       }
@@ -715,6 +740,7 @@
             <td>${escapeHtml(entry.details ?? "-")}</td>
             <td>${escapeHtml(entry.techName ?? "-")}</td>
           `;
+          applyMobileLabels(tr, ["Date", "Action", "Details", "Tech"]);
           damageHistoryBody.appendChild(tr);
         }
       }
@@ -736,6 +762,7 @@
             <td>${escapeHtml(entry.details ?? "-")}</td>
             <td>${escapeHtml(entry.techName ?? "-")}</td>
           `;
+          applyMobileLabels(tr, ["Date", "Hours", "Details", "Tech"]);
           serviceHistoryBody.appendChild(tr);
         }
       }
@@ -1059,6 +1086,7 @@
               </div>
             </td>
           `;
+          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Last Rented", "Action"]);
           tr.querySelector(".js-inspect").addEventListener("click", () => {
             openInspectModal(row).catch((e) =>
               setMsg(maintenanceError, "Failed to load inspection form: " + String(e.message || e)),
@@ -1095,6 +1123,7 @@
               </div>
             </td>
           `;
+          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Reason", "Last Rented", "Action"]);
           tr.querySelector(".js-down-complete").addEventListener("click", () => {
             if (!row?.id) return;
             openCompleteModal(row);

@@ -47,6 +47,7 @@
       .warn-text { color:#f2c572; }
       .actions { display:flex; flex-wrap:wrap; gap:6px; }
       .small { padding:6px 10px; font-size:12px; border-radius:7px; }
+      .mobile-cards-table {}
       .modal-backdrop { position:fixed; inset:0; background:rgba(6,9,13,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
       .modal { width:100%; max-width:560px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
       .modal h3 { margin:0; font-size:16px; }
@@ -68,6 +69,12 @@
         .brand-logo { height:64px; }
         .top-nav { gap:6px; }
         .nav-link { padding:7px 10px; font-size:11px; }
+        table.mobile-cards-table thead { display:none; }
+        table.mobile-cards-table, table.mobile-cards-table tbody, table.mobile-cards-table tr, table.mobile-cards-table td { display:block; width:100%; }
+        table.mobile-cards-table tr { border:1px solid var(--border); border-radius:10px; margin-bottom:10px; padding:8px; background:#141d28; }
+        table.mobile-cards-table td { border-bottom:1px solid rgba(42,54,71,.6); padding:8px 6px; }
+        table.mobile-cards-table td:last-child { border-bottom:0; }
+        table.mobile-cards-table td::before { content: attr(data-label); display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
       }
     </style>
   </head>
@@ -131,7 +138,7 @@
           <button class="btn secondary small" id="res-add-line" type="button">Add to Reservation</button>
         </div>
         <div class="hint">Selected type lines for this reservation:</div>
-        <table style="margin-top:8px;">
+        <table class="mobile-cards-table" style="margin-top:8px;">
           <thead>
             <tr>
               <th>Type</th>
@@ -162,7 +169,7 @@
         </div>
         <div class="hint" style="margin-bottom:8px;">Activate Selected requires all entries with the same customer and start/end date+time to be selected.</div>
         <div class="empty" id="res-empty" style="display:none;">No reservations yet.</div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:38px;"></th>
@@ -344,6 +351,7 @@
             <td>${line.quantity}</td>
             <td><button class="btn danger small js-remove-line" data-idx="${idx}" type="button">Remove</button></td>
           `;
+          applyMobileLabels(tr, ["Type", "Quantity", "Options"]);
           tr.querySelector(".js-remove-line").addEventListener("click", () => {
             reservationLines.splice(idx, 1);
             renderReservationLines();
@@ -508,6 +516,14 @@
           .replaceAll("'", "&#039;");
       }
 
+      function applyMobileLabels(tr, labels) {
+        const cells = tr.querySelectorAll("td");
+        cells.forEach((cell, index) => {
+          const label = labels[index] || "";
+          if (label) cell.setAttribute("data-label", label);
+        });
+      }
+
       function batchGroupKey(entry) {
         return [
           String(entry.customerName || "").trim().toLowerCase(),
@@ -560,6 +576,21 @@
               </div>
             </td>
           `;
+          applyMobileLabels(tr, [
+            "Select",
+            "Order Number",
+            "Customer Name",
+            "Address",
+            "Start Date",
+            "Start Time",
+            "End Date",
+            "End Time",
+            "Type",
+            "Quantity",
+            "Assigned Units",
+            "Fulfillment",
+            "Options",
+          ]);
 
           tr.querySelector(".js-swap").addEventListener("click", () => swapOne(r.id));
 

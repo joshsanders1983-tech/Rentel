@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "rentel.theme";
+  const MOBILE_STYLE_ID = "rentel-mobile-helpers";
   const THEMES = {
     dark: {
       "--bg": "#0f1419",
@@ -41,12 +42,58 @@
     return normalized;
   }
 
+  function ensureMobileHelpers() {
+    if (document.getElementById(MOBILE_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = MOBILE_STYLE_ID;
+    style.textContent = `
+      .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .table-scroll > table {
+        min-width: 640px;
+      }
+      @media (max-width: 560px) {
+        .top-nav {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          padding-bottom: 4px;
+        }
+        .top-nav .nav-link-admin {
+          margin-left: 0;
+        }
+        .btn {
+          min-height: 40px;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    const tables = Array.from(document.querySelectorAll("table"));
+    for (const table of tables) {
+      const parent = table.parentElement;
+      if (!parent || parent.classList.contains("table-scroll")) continue;
+      const wrapper = document.createElement("div");
+      wrapper.className = "table-scroll";
+      parent.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    }
+  }
+
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
     if (cached) applyTheme(cached);
     else applyTheme("dark");
   } catch {
     applyTheme("dark");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ensureMobileHelpers, { once: true });
+  } else {
+    ensureMobileHelpers();
   }
 
   fetch("/api/admin/public-settings", { credentials: "same-origin" })

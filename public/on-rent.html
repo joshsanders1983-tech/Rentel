@@ -27,6 +27,7 @@
       .btn:disabled { cursor:not-allowed; opacity:.6; }
       .small { padding:6px 10px; font-size:12px; border-radius:7px; }
       .actions { display:flex; flex-wrap:wrap; gap:6px; }
+      .mobile-cards-table {}
       table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:10px; }
       thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
       tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
@@ -58,6 +59,12 @@
         .brand-logo { height:64px; }
         .top-nav { gap:6px; }
         .nav-link { padding:7px 10px; font-size:11px; }
+        table.mobile-cards-table thead { display:none; }
+        table.mobile-cards-table, table.mobile-cards-table tbody, table.mobile-cards-table tr, table.mobile-cards-table td { display:block; width:100%; }
+        table.mobile-cards-table tr { border:1px solid var(--border); border-radius:10px; margin-bottom:10px; padding:8px; background:#141d28; }
+        table.mobile-cards-table td { border-bottom:1px solid rgba(42,54,71,.6); padding:8px 6px; }
+        table.mobile-cards-table td:last-child { border-bottom:0; }
+        table.mobile-cards-table td::before { content: attr(data-label); display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
       }
     </style>
   </head>
@@ -87,7 +94,7 @@
           <button class="btn" id="refresh-onrent" type="button">Refresh</button>
         </div>
         <div class="empty" id="onrent-empty" style="display:none;margin-top:8px;">No active On Rent entries yet.</div>
-        <table>
+        <table class="mobile-cards-table">
           <thead>
             <tr>
               <th style="width:38px;"></th>
@@ -169,6 +176,14 @@
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      function applyMobileLabels(tr, labels) {
+        const cells = tr.querySelectorAll("td");
+        cells.forEach((cell, index) => {
+          const label = labels[index] || "";
+          if (label) cell.setAttribute("data-label", label);
+        });
       }
 
       function normalizeBatchText(value) {
@@ -307,6 +322,18 @@
               </div>
             </td>
           `;
+          applyMobileLabels(tr, [
+            "Select",
+            "Added On Rent At",
+            "Order Number",
+            "Customer Name",
+            "Address",
+            "Start",
+            "End",
+            "Type",
+            "Unit Number",
+            "Options",
+          ]);
 
           const checkbox = tr.querySelector(".js-onrent-select");
           checkbox.addEventListener("change", () => {
