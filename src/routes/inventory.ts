@@ -362,159 +362,182 @@ apiInventoryRouter.patch("/:id", requireAdmin, async (req, res) => {
 });
 
 apiInventoryRouter.post("/manual-down", requireTech, async (req, res) => {
-  const body = req.body as Record<string, unknown>;
-  const actorName = getTechSession(req)?.techName || "";
-  const unitNumber =
-    typeof body.unitNumber === "string" ? body.unitNumber.trim() : "";
-  const reason =
-    typeof body.reason === "string" ? body.reason.trim() : "";
-  const hours = Number(body.hours);
-  const downReason = actorName ? `${reason} (Tech: ${actorName})` : reason;
+  try {
+    const body = req.body as Record<string, unknown>;
+    const actorName = getTechSession(req)?.techName || "";
+    const unitNumber =
+      typeof body.unitNumber === "string" ? body.unitNumber.trim() : "";
+    const reason =
+      typeof body.reason === "string" ? body.reason.trim() : "";
+    const hours = Number(body.hours);
+    const downReason = actorName ? `${reason} (Tech: ${actorName})` : reason;
 
-  if (!unitNumber) {
-    res.status(400).json({ error: "Unit # is required." });
-    return;
-  }
-  if (!Number.isFinite(hours)) {
-    res.status(400).json({ error: "Hours must be a valid number." });
-    return;
-  }
-  if (hours < 0) {
-    res.status(400).json({ error: "Hours cannot be negative." });
-    return;
-  }
-  if (!reason) {
-    res.status(400).json({ error: "Reason is required." });
-    return;
-  }
+    if (!unitNumber) {
+      res.status(400).json({ error: "Unit # is required." });
+      return;
+    }
+    if (!Number.isFinite(hours)) {
+      res.status(400).json({ error: "Hours must be a valid number." });
+      return;
+    }
+    if (hours < 0) {
+      res.status(400).json({ error: "Hours cannot be negative." });
+      return;
+    }
+    if (!reason) {
+      res.status(400).json({ error: "Reason is required." });
+      return;
+    }
 
-  const existing = await prisma.inventory.findUnique({
-    where: { unitNumber },
-    include: { asset: true },
-  });
-  if (!existing) {
-    res.status(404).json({ error: `Unit ${unitNumber} was not found.` });
-    return;
+    const existing = await prisma.inventory.findUnique({
+      where: { unitNumber },
+      include: { asset: true },
+    });
+    if (!existing) {
+      res.status(404).json({ error: `Unit ${unitNumber} was not found.` });
+      return;
+    }
+
+    const updated = await prisma.inventory.update({
+      where: { id: existing.id },
+      data: {
+        status: "Down",
+        hours,
+        downReason,
+        inspectionRequired: false,
+      },
+      include: { asset: true },
+    });
+
+    // Non-critical side effects should not fail the user action after status update.
+    try {
+      await appendRepairHistoryEntry({
+        inventoryId: updated.id,
+        action: "DOWN",
+        details: downReason || "Moved to Down.",
+        techName: actorName || null,
+      });
+      await evaluateMaintenanceRulesForUnits([updated.id]);
+    } catch (err) {
+      console.error("[inventory] manual-down side effect failed:", err);
+    }
+
+    const hydrated = await prisma.inventory.findUnique({
+      where: { id: updated.id },
+      include: { asset: true },
+    });
+    const row = hydrated || updated;
+    invalidateInventoryCache();
+
+    res.json({
+      ...row,
+      status: normalizeStatus(row.status),
+    });
+  } catch (err) {
+    console.error("[inventory] POST /manual-down failed:", err);
+    res.status(500).json({ error: "Failed to move unit to Down." });
   }
-
-  const updated = await prisma.inventory.update({
-    where: { id: existing.id },
-    data: {
-      status: "Down",
-      hours,
-      downReason,
-      inspectionRequired: false,
-    },
-    include: { asset: true },
-  });
-  await appendRepairHistoryEntry({
-    inventoryId: updated.id,
-    action: "DOWN",
-    details: downReason || "Moved to Down.",
-    techName: actorName || null,
-  });
-  await evaluateMaintenanceRulesForUnits([updated.id]);
-  const hydrated = await prisma.inventory.findUnique({
-    where: { id: updated.id },
-    include: { asset: true },
-  });
-  const row = hydrated || updated;
-  invalidateInventoryCache();
-
-  res.json({
-    ...row,
-    status: normalizeStatus(row.status),
-  });
 });
 
 apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
-  const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
-  if (!id) {
-    res.status(400).json({ error: "Invalid inventory id." });
-    return;
-  }
+  try {
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: "Invalid inventory id." });
+      return;
+    }
 
-  const body = req.body as Record<string, unknown>;
-  const actorName = getTechSession(req)?.techName || "";
-  const repairHours = Number(body.hours);
+    const body = req.body as Record<string, unknown>;
+    const actorName = getTechSession(req)?.techName || "";
+    const repairHours = Number(body.hours);
 
-  if (!Number.isFinite(repairHours)) {
-    res.status(400).json({ error: "Hours is required and must be a valid number." });
-    return;
-  }
-  if (repairHours < 0) {
-    res.status(400).json({ error: "Hours cannot be negative." });
-    return;
-  }
+    if (!Number.isFinite(repairHours)) {
+      res.status(400).json({ error: "Hours is required and must be a valid number." });
+      return;
+    }
+    if (repairHours < 0) {
+      res.status(400).json({ error: "Hours cannot be negative." });
+      return;
+    }
 
-  const existing = await prisma.inventory.findUnique({
-    where: { id },
-    include: { asset: true },
-  });
-  if (!existing) {
-    res.status(404).json({ error: "Inventory unit not found." });
-    return;
-  }
-  if (!isDownStatus(existing.status)) {
-    res.status(400).json({ error: "Unit must be Down before it can be completed." });
-    return;
-  }
-  if (existing.hours !== null && repairHours < existing.hours) {
-    res.status(400).json({
-      error: `Hours must be greater than or equal to ${existing.hours} (current unit hours).`,
+    const existing = await prisma.inventory.findUnique({
+      where: { id },
+      include: { asset: true },
     });
-    return;
-  }
+    if (!existing) {
+      res.status(404).json({ error: "Inventory unit not found." });
+      return;
+    }
+    if (!isDownStatus(existing.status)) {
+      res.status(400).json({ error: "Unit must be Down before it can be completed." });
+      return;
+    }
+    if (existing.hours !== null && repairHours < existing.hours) {
+      res.status(400).json({
+        error: `Hours must be greater than or equal to ${existing.hours} (current unit hours).`,
+      });
+      return;
+    }
 
-  const completedAt = new Date();
-  const updated = await prisma.inventory.update({
-    where: { id: existing.id },
-    data: {
-      status: "Available",
-      hours: repairHours,
-      downReason: null,
-      inspectionRequired: false,
-      lastInspectionCompletedAt: completedAt,
-    },
-    include: { asset: true },
-  });
-
-  await appendRepairHistoryEntry({
-    inventoryId: updated.id,
-    action: "COMPLETE",
-    details: existing.downReason
-      ? `Completed repair: ${existing.downReason}`
-      : "Completed repair and returned unit to Available.",
-    techName: actorName || null,
-    repairHours,
-    createdAt: completedAt,
-  });
-
-  if (isServiceDueReason(existing.downReason)) {
-    await appendServiceHistoryEntry({
-      inventoryId: updated.id,
-      details: existing.downReason
-        ? `Completed service: ${existing.downReason}`
-        : "Completed scheduled service.",
-      techName: actorName || null,
-      repairHours,
-      createdAt: completedAt,
+    const completedAt = new Date();
+    const updated = await prisma.inventory.update({
+      where: { id: existing.id },
+      data: {
+        status: "Available",
+        hours: repairHours,
+        downReason: null,
+        inspectionRequired: false,
+        lastInspectionCompletedAt: completedAt,
+      },
+      include: { asset: true },
     });
+
+    // Non-critical side effects should not fail the complete action response.
+    try {
+      await appendRepairHistoryEntry({
+        inventoryId: updated.id,
+        action: "COMPLETE",
+        details: existing.downReason
+          ? `Completed repair: ${existing.downReason}`
+          : "Completed repair and returned unit to Available.",
+        techName: actorName || null,
+        repairHours,
+        createdAt: completedAt,
+      });
+
+      if (isServiceDueReason(existing.downReason)) {
+        await appendServiceHistoryEntry({
+          inventoryId: updated.id,
+          details: existing.downReason
+            ? `Completed service: ${existing.downReason}`
+            : "Completed scheduled service.",
+          techName: actorName || null,
+          repairHours,
+          createdAt: completedAt,
+        });
+      }
+
+      await completeOpenMaintenanceTasksForInventory(updated.id, completedAt.toISOString());
+      await evaluateMaintenanceRulesForUnits([updated.id]);
+    } catch (err) {
+      console.error("[inventory] complete side effect failed:", err);
+    }
+
+    const hydrated = await prisma.inventory.findUnique({
+      where: { id: updated.id },
+      include: { asset: true },
+    });
+    const row = hydrated || updated;
+    invalidateInventoryCache();
+
+    res.json({
+      ...row,
+      status: normalizeStatus(row.status),
+    });
+  } catch (err) {
+    console.error("[inventory] POST /:id/complete failed:", err);
+    res.status(500).json({ error: "Failed to complete unit." });
   }
-
-  await completeOpenMaintenanceTasksForInventory(updated.id, completedAt.toISOString());
-  await evaluateMaintenanceRulesForUnits([updated.id]);
-  const hydrated = await prisma.inventory.findUnique({
-    where: { id: updated.id },
-    include: { asset: true },
-  });
-  const row = hydrated || updated;
-  invalidateInventoryCache();
-
-  res.json({
-    ...row,
-    status: normalizeStatus(row.status),
-  });
 });
 
 apiInventoryRouter.get("/:id/repair-history", requireTech, async (req, res) => {
