@@ -225,3 +225,13 @@ model ReservationEntry {
 
   @@index([listKind, listEnteredAt])
 }
+
+/// Singleton app-level branding/theme settings.
+model AppSettings {
+  id        String   @id @default("default")
+  theme     String   @default("dark")
+  logoMime  String?
+  logoBytes Bytes?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

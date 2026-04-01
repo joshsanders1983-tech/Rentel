@@ -565,69 +565,74 @@ apiMaintenanceAutomationRouter.delete("/rules/:id", requireAdmin, async (req, re
 });
 
 apiMaintenanceAutomationRouter.get("/tasks", async (req, res) => {
-  await ensureMaintenanceAutomationSchema();
-  const statusFilter =
-    typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "open";
-  const where =
-    statusFilter === "all" ? "" : `WHERE "MaintenanceTask"."status" != 'COMPLETED'`;
+  try {
+    await ensureMaintenanceAutomationSchema();
+    const statusFilter =
+      typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "open";
+    const where =
+      statusFilter === "all" ? "" : `WHERE "MaintenanceTask"."status" != 'COMPLETED'`;
 
-  const tasks = await queryRows<{
-    id: string;
-    ruleId: string;
-    inventoryId: string;
-    triggerType: TriggerType;
-    dueValue: number;
-    currentValue: number;
-    status: TaskStatus;
-    reason: string;
-    inspectionFormId: string | null;
-    assignedTechName: string | null;
-    createdAt: string;
-    updatedAt: string;
-    completedAt: string | null;
-    completionInspectionSubmissionId: string | null;
-    ruleName: string;
-    serviceLabel: string;
-    intervalValue: number;
-    unitNumber: string;
-    assetType: string | null;
-    assetDescription: string | null;
-    inspectionFormName: string | null;
-  }>(
-    `
-    SELECT
-      "MaintenanceTask"."id" AS "id",
-      "MaintenanceTask"."ruleId" AS "ruleId",
-      "MaintenanceTask"."inventoryId" AS "inventoryId",
-      "MaintenanceTask"."triggerType" AS "triggerType",
-      "MaintenanceTask"."dueValue" AS "dueValue",
-      "MaintenanceTask"."currentValue" AS "currentValue",
-      "MaintenanceTask"."status" AS "status",
-      "MaintenanceTask"."reason" AS "reason",
-      "MaintenanceTask"."inspectionFormId" AS "inspectionFormId",
-      "MaintenanceTask"."assignedTechName" AS "assignedTechName",
-      "MaintenanceTask"."createdAt" AS "createdAt",
-      "MaintenanceTask"."updatedAt" AS "updatedAt",
-      "MaintenanceTask"."completedAt" AS "completedAt",
-      "MaintenanceTask"."completionInspectionSubmissionId" AS "completionInspectionSubmissionId",
-      "MaintenanceRule"."name" AS "ruleName",
-      "MaintenanceRule"."serviceLabel" AS "serviceLabel",
-      "MaintenanceRule"."intervalValue" AS "intervalValue",
-      "Inventory"."unitNumber" AS "unitNumber",
-      "Asset"."type" AS "assetType",
-      "Asset"."description" AS "assetDescription",
-      "InspectionForm"."name" AS "inspectionFormName"
-    FROM "MaintenanceTask"
-    LEFT JOIN "MaintenanceRule" ON "MaintenanceRule"."id" = "MaintenanceTask"."ruleId"
-    LEFT JOIN "Inventory" ON "Inventory"."id" = "MaintenanceTask"."inventoryId"
-    LEFT JOIN "Asset" ON "Asset"."id" = "Inventory"."assetId"
-    LEFT JOIN "InspectionForm" ON "InspectionForm"."id" = "MaintenanceTask"."inspectionFormId"
-    ${where}
-    ORDER BY "MaintenanceTask"."createdAt" DESC
-    `,
-  );
+    const tasks = await queryRows<{
+      id: string;
+      ruleId: string;
+      inventoryId: string;
+      triggerType: TriggerType;
+      dueValue: number;
+      currentValue: number;
+      status: TaskStatus;
+      reason: string;
+      inspectionFormId: string | null;
+      assignedTechName: string | null;
+      createdAt: string;
+      updatedAt: string;
+      completedAt: string | null;
+      completionInspectionSubmissionId: string | null;
+      ruleName: string;
+      serviceLabel: string;
+      intervalValue: number;
+      unitNumber: string;
+      assetType: string | null;
+      assetDescription: string | null;
+      inspectionFormName: string | null;
+    }>(
+      `
+      SELECT
+        "MaintenanceTask"."id" AS "id",
+        "MaintenanceTask"."ruleId" AS "ruleId",
+        "MaintenanceTask"."inventoryId" AS "inventoryId",
+        "MaintenanceTask"."triggerType" AS "triggerType",
+        "MaintenanceTask"."dueValue" AS "dueValue",
+        "MaintenanceTask"."currentValue" AS "currentValue",
+        "MaintenanceTask"."status" AS "status",
+        "MaintenanceTask"."reason" AS "reason",
+        "MaintenanceTask"."inspectionFormId" AS "inspectionFormId",
+        "MaintenanceTask"."assignedTechName" AS "assignedTechName",
+        "MaintenanceTask"."createdAt" AS "createdAt",
+        "MaintenanceTask"."updatedAt" AS "updatedAt",
+        "MaintenanceTask"."completedAt" AS "completedAt",
+        "MaintenanceTask"."completionInspectionSubmissionId" AS "completionInspectionSubmissionId",
+        "MaintenanceRule"."name" AS "ruleName",
+        "MaintenanceRule"."serviceLabel" AS "serviceLabel",
+        "MaintenanceRule"."intervalValue" AS "intervalValue",
+        "Inventory"."unitNumber" AS "unitNumber",
+        "Asset"."type" AS "assetType",
+        "Asset"."description" AS "assetDescription",
+        "InspectionForm"."name" AS "inspectionFormName"
+      FROM "MaintenanceTask"
+      LEFT JOIN "MaintenanceRule" ON "MaintenanceRule"."id" = "MaintenanceTask"."ruleId"
+      LEFT JOIN "Inventory" ON "Inventory"."id" = "MaintenanceTask"."inventoryId"
+      LEFT JOIN "Asset" ON "Asset"."id" = "Inventory"."assetId"
+      LEFT JOIN "InspectionForm" ON "InspectionForm"."id" = "MaintenanceTask"."inspectionFormId"
+      ${where}
+      ORDER BY "MaintenanceTask"."createdAt" DESC
+      `,
+    );
 
-  res.json(tasks);
+    res.json(tasks);
+  } catch (err) {
+    console.error("[maintenance-automation] GET /tasks failed:", err);
+    res.json([]);
+  }
 });
 
 apiMaintenanceAutomationRouter.patch(

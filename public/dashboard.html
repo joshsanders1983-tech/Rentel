@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard</title>
+    <script src="/app-theme.js"></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -48,9 +49,12 @@
       tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
       tbody tr:last-child td { border-bottom:0; }
       .empty { color:var(--muted); font-size:13px; }
-      .map-card { margin-top:12px; }
+      .layout-row { margin-top:12px; display:grid; grid-template-columns:minmax(420px,1fr) minmax(360px,1fr); gap:12px; align-items:start; }
+      .stacked-table-card .section-head { margin-top:4px; }
+      .stacked-table-divider { margin:12px 0; border:0; border-top:1px solid var(--border); }
+      .map-card { margin-top:0; }
       .map-wrap { border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
-      #dashboard-map { width:100%; height:340px; background:#101723; }
+      #dashboard-map { width:100%; height:170px; background:#101723; }
       .map-help { margin-top:8px; font-size:12px; color:var(--muted); }
       .map-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:8px; }
       .map-legend { display:flex; align-items:center; gap:12px; font-size:12px; color:var(--muted); }
@@ -74,6 +78,7 @@
       .pin.pickup { background:#f57c00; }
       @media (max-width: 900px) { .grid { grid-template-columns:repeat(2,minmax(160px,1fr)); } }
       @media (max-width: 560px) { .grid { grid-template-columns:1fr; } }
+      @media (max-width: 1000px) { .layout-row { grid-template-columns:1fr; } }
       @media (max-width: 900px) {
         header { padding:12px 14px; }
         .brand { align-items:flex-start; }
@@ -93,7 +98,6 @@
   <body>
     <header>
       <div class="brand">
-        <img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'" />
         <div>
           <h1>Dashboard</h1>
           <div class="sub">This is the app home. Use the navigation row to move across modules as we build.</div>
@@ -107,7 +111,7 @@
         <a class="nav-link" href="/potentials">Potentials</a>
         <a class="nav-link" href="/inventory">Inventory</a>
         <a class="nav-link nav-link-admin" href="/admin">Admin</a>
-        <a class="nav-link" href="/techs">Techs</a>
+        <a class="nav-link" href="/techs">Shop</a>
       </nav>
     </header>
 
@@ -127,82 +131,79 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:12px;">
-        <div class="row">
-          <a class="btn" href="/reservations">Start a Reservation</a>
-        </div>
-        <div id="load-error" class="msg" style="display:none;"></div>
-      </div>
+      <div id="load-error" class="msg" style="display:none;"></div>
 
-      <div class="card map-card">
-        <div class="section-head">
-          <h2>Upcoming Stops Map</h2>
-          <select id="map-basemap-select" class="filter-select" aria-label="Map basemap">
-            <option value="osm">OpenStreetMap</option>
-            <option value="google">Google Maps</option>
-          </select>
-        </div>
-        <div class="map-wrap">
-          <div id="dashboard-map" role="img" aria-label="Map showing delivery and pickup locations"></div>
-        </div>
-        <div class="map-toolbar">
-          <div class="map-legend" aria-live="polite">
-            <span><span class="legend-dot delivery"></span>D: <strong id="legend-deliveries-count">0</strong></span>
-            <span><span class="legend-dot pickup"></span>P: <strong id="legend-pickups-count">0</strong></span>
+      <div class="layout-row">
+        <div class="card stacked-table-card">
+          <div class="section-head">
+            <h2>Upcoming Deliveries and Pickups</h2>
           </div>
-          <div id="map-provider-note" class="map-help"></div>
-        </div>
-        <div class="map-help">Blue pins are deliveries (`D`). Orange pins are pickups (`P`). Nearby pins are clustered.</div>
-      </div>
 
-      <div class="card">
-        <div class="section-head">
-          <h2>Upcoming Deliveries</h2>
-          <select id="dash-deliveries-filter" class="filter-select" aria-label="Filter upcoming deliveries">
-            <option value="today">Today</option>
-            <option value="next7">Next 7 days</option>
-            <option value="thisMonth">This Month</option>
-            <option value="nextMonth">Next Month</option>
-          </select>
-        </div>
-        <div class="empty" id="dash-deliveries-empty" style="display:none;">No upcoming deliveries.</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Customer Name</th>
-              <th>Address</th>
-              <th>Unit Number(s)</th>
-              <th>Type(s)</th>
-              <th>Start Date/Time</th>
-            </tr>
-          </thead>
-          <tbody id="dash-deliveries-body"></tbody>
-        </table>
-      </div>
+          <div class="section-head">
+            <h2>Upcoming Deliveries</h2>
+            <select id="dash-deliveries-filter" class="filter-select" aria-label="Filter upcoming deliveries">
+              <option value="today">Today</option>
+              <option value="next7">Next 7 days</option>
+              <option value="thisMonth">This Month</option>
+              <option value="nextMonth">Next Month</option>
+            </select>
+          </div>
+          <div class="empty" id="dash-deliveries-empty" style="display:none;">No upcoming deliveries.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Address</th>
+                <th>Unit Number(s)</th>
+                <th>Type(s)</th>
+                <th>Start Date/Time</th>
+              </tr>
+            </thead>
+            <tbody id="dash-deliveries-body"></tbody>
+          </table>
 
-      <div class="card">
-        <div class="section-head">
-          <h2>Upcoming Pickups</h2>
-          <select id="dash-pickups-filter" class="filter-select" aria-label="Filter upcoming pickups">
-            <option value="today">Today</option>
-            <option value="next7">Next 7 days</option>
-            <option value="thisMonth">This Month</option>
-            <option value="nextMonth">Next Month</option>
-          </select>
+          <hr class="stacked-table-divider" />
+
+          <div class="section-head">
+            <h2>Upcoming Pickups</h2>
+            <select id="dash-pickups-filter" class="filter-select" aria-label="Filter upcoming pickups">
+              <option value="today">Today</option>
+              <option value="next7">Next 7 days</option>
+              <option value="thisMonth">This Month</option>
+              <option value="nextMonth">Next Month</option>
+            </select>
+          </div>
+          <div class="empty" id="dash-pickups-empty" style="display:none;">No upcoming pickups.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Address</th>
+                <th>Unit Number(s)</th>
+                <th>Type(s)</th>
+                <th>End Date/Time</th>
+              </tr>
+            </thead>
+            <tbody id="dash-pickups-body"></tbody>
+          </table>
         </div>
-        <div class="empty" id="dash-pickups-empty" style="display:none;">No upcoming pickups.</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Customer Name</th>
-              <th>Address</th>
-              <th>Unit Number(s)</th>
-              <th>Type(s)</th>
-              <th>End Date/Time</th>
-            </tr>
-          </thead>
-          <tbody id="dash-pickups-body"></tbody>
-        </table>
+
+        <div class="card map-card">
+          <div class="section-head">
+            <h2>Upcoming Stops Map</h2>
+          </div>
+          <div class="map-wrap">
+            <div id="dashboard-map" role="img" aria-label="Map showing delivery and pickup locations"></div>
+          </div>
+          <div class="map-toolbar">
+            <div class="map-legend" aria-live="polite">
+              <span><span class="legend-dot delivery"></span>D: <strong id="legend-deliveries-count">0</strong></span>
+              <span><span class="legend-dot pickup"></span>P: <strong id="legend-pickups-count">0</strong></span>
+            </div>
+            <div id="map-provider-note" class="map-help"></div>
+          </div>
+          <div class="map-help">Blue pins are deliveries (`D`). Orange pins are pickups (`P`). Nearby pins are clustered.</div>
+        </div>
       </div>
     </main>
 
@@ -221,7 +222,7 @@
       let dashboardMap = null;
       let markersLayer = null;
       let baseLayer = null;
-      let currentProvider = "osm";
+      let currentProvider = "google";
       let googleReady = false;
 
       function setMetric(id, value) {
@@ -365,10 +366,6 @@
         return local ? local.trim() : "";
       }
 
-      function defaultMapProvider() {
-        return getGoogleMapsKey() ? "google" : "osm";
-      }
-
       async function ensureGoogleMapsLoaded() {
         if (googleReady) return true;
         const key = getGoogleMapsKey();
@@ -407,7 +404,6 @@
             return;
           }
           $("map-provider-note").textContent = "Google Maps key not found. Using OpenStreetMap. Set window.RENTEL_GOOGLE_MAPS_API_KEY or localStorage key `rentel-google-maps-key`.";
-          $("map-basemap-select").value = "osm";
         } else {
           $("map-provider-note").textContent = "OpenStreetMap basemap enabled.";
         }
@@ -423,9 +419,7 @@
       function ensureMap() {
         if (dashboardMap || typeof L === "undefined") return;
         dashboardMap = L.map("dashboard-map", { scrollWheelZoom: false }).setView([39.8283, -98.5795], 4);
-        const preferredProvider = defaultMapProvider();
-        $("map-basemap-select").value = preferredProvider;
-        void applyBaseLayer(preferredProvider);
+        void applyBaseLayer("google");
         markersLayer = L.markerClusterGroup({
           showCoverageOnHover: false,
           spiderfyOnMaxZoom: true,
@@ -562,11 +556,6 @@
         $("dash-pickups-filter").value = "next7";
         $("dash-deliveries-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
         $("dash-pickups-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
-        $("map-basemap-select").addEventListener("change", async () => {
-          const selected = $("map-basemap-select").value;
-          if (selected === currentProvider) return;
-          await applyBaseLayer(selected);
-        });
       }
 
       async function loadDashboard() {

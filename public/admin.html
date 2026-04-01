@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin</title>
+    <script src="/app-theme.js"></script>
     <style>
       :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
       * { box-sizing: border-box; }
@@ -77,7 +78,6 @@
   <body>
     <header>
       <div class="brand">
-        <img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'" />
         <div>
           <h1>Admin</h1>
           <div class="sub">Inventory editor access is restricted to admins only.</div>
@@ -91,7 +91,7 @@
         <a class="nav-link" href="/potentials">Potentials</a>
         <a class="nav-link" href="/inventory">Inventory</a>
         <a class="nav-link nav-link-admin active" href="/admin">Admin</a>
-        <a class="nav-link" href="/techs">Techs</a>
+        <a class="nav-link" href="/techs">Shop</a>
       </nav>
     </header>
 
@@ -118,6 +118,35 @@
             <button class="secondary" id="open-edit-assets" type="button">Edit Assets</button>
             <button class="danger" id="admin-logout" type="button">Lock Admin</button>
           </div>
+        </div>
+
+        <div class="card">
+          <h2>Settings</h2>
+          <div class="sub">Choose your app theme and manage your company logo file.</div>
+          <div class="grid-2" style="margin-top:12px;">
+            <div>
+              <label for="settings-theme">Theme</label>
+              <select id="settings-theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+              <div class="row" style="margin-top:10px;">
+                <button id="settings-save-theme" type="button">Save Theme</button>
+              </div>
+            </div>
+            <div>
+              <label for="settings-logo-input">Company Logo</label>
+              <input id="settings-logo-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+              <div class="hint-note">Used as your custom logo asset. Max size: 5MB.</div>
+              <div class="row" style="margin-top:10px;">
+                <button id="settings-upload-logo" type="button">Upload Logo</button>
+                <button class="secondary" id="settings-remove-logo" type="button">Remove Logo</button>
+              </div>
+              <div id="settings-logo-meta" class="hint-note" style="margin-top:8px;"></div>
+            </div>
+          </div>
+          <div id="settings-error" class="msg" style="display:none;"></div>
+          <div id="settings-success" class="msg" style="display:none; color:#6bd18c;"></div>
         </div>
 
         <div class="card">
@@ -168,7 +197,7 @@
 
         <div class="card">
           <h2>Tech Entry</h2>
-          <div class="sub">Manage technician accounts used for Techs sign-in.</div>
+          <div class="sub">Manage technician accounts used for Shop sign-in.</div>
           <div class="row" style="margin-top:12px;">
             <select id="tech-entry-select"></select>
             <button id="tech-entry-new" class="secondary" type="button">New Tech</button>
@@ -515,6 +544,14 @@
       const maintenanceRuleErr = $("maintenance-rule-error");
       const maintenanceRulesEmpty = $("maintenance-rules-empty");
       const maintenanceRulesBody = $("maintenance-rules-body");
+      const settingsTheme = $("settings-theme");
+      const settingsSaveThemeBtn = $("settings-save-theme");
+      const settingsLogoInput = $("settings-logo-input");
+      const settingsUploadLogoBtn = $("settings-upload-logo");
+      const settingsRemoveLogoBtn = $("settings-remove-logo");
+      const settingsLogoMeta = $("settings-logo-meta");
+      const settingsErr = $("settings-error");
+      const settingsSuccess = $("settings-success");
 
       let assets = [];
       let inventoryRows = [];
@@ -530,6 +567,7 @@
       let editOriginalStatus = "";
       let confirmResolver = null;
       let promptResolver = null;
+      let hasUploadedLogo = false;
       const INSPECTION_OPTION_DEFS = [
         { key: "ok", label: "Ok" },
         { key: "needsAttention", label: "Needs attention" },
@@ -540,6 +578,20 @@
       function setMsg(el, msg) {
         el.style.display = msg ? "block" : "none";
         el.textContent = msg || "";
+      }
+
+      function clearSettingsMessages() {
+        setMsg(settingsErr, "");
+        setMsg(settingsSuccess, "");
+      }
+
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("Failed to read the selected file."));
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.readAsDataURL(file);
+        });
       }
 
       function hasAnyInspectionOption(options) {
@@ -1436,6 +1488,15 @@
         renderTechEntryPanel();
       }
 
+      async function loadAdminSettings() {
+        const settings = await api("/api/admin/settings");
+        settingsTheme.value = settings && settings.theme === "light" ? "light" : "dark";
+        hasUploadedLogo = Boolean(settings && settings.hasLogo);
+        settingsLogoMeta.textContent = hasUploadedLogo
+          ? `Current logo: ${settings.logoMime || "image"}`
+          : "No logo uploaded.";
+      }
+
       function openEditModal(row) {
         setMsg(editErr, "");
         editId.value = row.id;
@@ -1497,6 +1558,7 @@
           loadInspectionForms(),
           loadInspectionAssetMappings(),
           loadTechnicians(),
+          loadAdminSettings(),
         ]);
         await loadInspectionFormItems();
         renderInspectionAssignmentSummary();
@@ -1928,7 +1990,7 @@
         const name = normalizeTechEntryName(tech);
         const confirmed = await openConfirmDialog({
           title: "Delete Technician",
-          text: `Delete technician "${name}" (${tech.username})? They will no longer be able to sign in to Techs.`,
+          text: `Delete technician "${name}" (${tech.username})? They will no longer be able to sign in to Shop.`,
           confirmLabel: "Delete",
           cancelLabel: "Cancel",
         });
@@ -2002,6 +2064,79 @@
         if (event.key === "Enter") {
           event.preventDefault();
           techEntrySave.click();
+        }
+      });
+
+      settingsSaveThemeBtn.addEventListener("click", async () => {
+        clearSettingsMessages();
+        const theme = settingsTheme.value === "light" ? "light" : "dark";
+        const originalText = settingsSaveThemeBtn.textContent;
+        settingsSaveThemeBtn.disabled = true;
+        settingsSaveThemeBtn.textContent = "Saving...";
+        try {
+          await api("/api/admin/settings/theme", {
+            method: "PATCH",
+            body: JSON.stringify({ theme }),
+          });
+          if (window.RentelTheme && typeof window.RentelTheme.applyTheme === "function") {
+            window.RentelTheme.applyTheme(theme);
+          }
+          setMsg(settingsSuccess, "Theme saved.");
+        } catch (e) {
+          setMsg(settingsErr, String(e.message || e));
+        } finally {
+          settingsSaveThemeBtn.disabled = false;
+          settingsSaveThemeBtn.textContent = originalText;
+        }
+      });
+
+      settingsUploadLogoBtn.addEventListener("click", async () => {
+        clearSettingsMessages();
+        const file = settingsLogoInput.files && settingsLogoInput.files[0];
+        if (!file) {
+          setMsg(settingsErr, "Choose a logo file first.");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          setMsg(settingsErr, "Logo must be 5MB or smaller.");
+          return;
+        }
+        settingsUploadLogoBtn.disabled = true;
+        settingsUploadLogoBtn.textContent = "Uploading...";
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          await api("/api/admin/settings/logo", {
+            method: "POST",
+            body: JSON.stringify({ dataUrl }),
+          });
+          settingsLogoInput.value = "";
+          await loadAdminSettings();
+          setMsg(settingsSuccess, "Logo uploaded.");
+        } catch (e) {
+          setMsg(settingsErr, String(e.message || e));
+        } finally {
+          settingsUploadLogoBtn.disabled = false;
+          settingsUploadLogoBtn.textContent = "Upload Logo";
+        }
+      });
+
+      settingsRemoveLogoBtn.addEventListener("click", async () => {
+        clearSettingsMessages();
+        if (!hasUploadedLogo) {
+          setMsg(settingsErr, "No uploaded logo to remove.");
+          return;
+        }
+        settingsRemoveLogoBtn.disabled = true;
+        settingsRemoveLogoBtn.textContent = "Removing...";
+        try {
+          await api("/api/admin/settings/logo", { method: "DELETE" });
+          await loadAdminSettings();
+          setMsg(settingsSuccess, "Logo removed.");
+        } catch (e) {
+          setMsg(settingsErr, String(e.message || e));
+        } finally {
+          settingsRemoveLogoBtn.disabled = false;
+          settingsRemoveLogoBtn.textContent = "Remove Logo";
         }
       });
 

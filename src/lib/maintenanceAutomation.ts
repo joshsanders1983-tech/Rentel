@@ -101,6 +101,16 @@ export function pgPlaceholders(count: number): string {
   return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
 }
 
+async function ensureMaintenanceAutomationSchemaSafe(context: string): Promise<boolean> {
+  try {
+    await ensureMaintenanceAutomationSchema();
+    return true;
+  } catch (err) {
+    console.error(`[maintenance-automation] Schema init failed (${context}).`, err);
+    return false;
+  }
+}
+
 export async function ensureMaintenanceAutomationSchema(): Promise<void> {
   await run(`
     CREATE TABLE IF NOT EXISTS "InventoryMaintenanceCounter" (
@@ -322,7 +332,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
 export async function evaluateMaintenanceRulesForUnits(
   inventoryIdsInput: string[],
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("evaluate-units"))) return;
 
   const inventoryIds = toIdList(inventoryIdsInput);
   if (inventoryIds.length === 0) return;
@@ -457,7 +467,7 @@ export async function evaluateMaintenanceRulesForUnits(
 }
 
 export async function evaluateMaintenanceRulesForAllUnits(): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("evaluate-all"))) return;
   const inventoryIds = await getAllInventoryIds();
   await evaluateMaintenanceRulesForUnits(inventoryIds);
 }
@@ -465,7 +475,7 @@ export async function evaluateMaintenanceRulesForAllUnits(): Promise<void> {
 export async function incrementRentalCycleCounters(
   inventoryIdsInput: string[],
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("increment-counters"))) return;
   const inventoryIds = toIdList(inventoryIdsInput);
   if (inventoryIds.length === 0) return;
 
@@ -493,7 +503,7 @@ export async function completeOpenMaintenanceTasksForInspection(
   inspectionFormId: string,
   submittedAtIso: string,
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("complete-for-inspection"))) return;
   const normalizedInventoryId = String(inventoryId || "").trim();
   if (!normalizedInventoryId) return;
 
@@ -536,7 +546,7 @@ export async function completeOpenMaintenanceTasksForInventory(
   inventoryId: string,
   completedAtInput?: string,
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("complete-for-inventory"))) return;
   const normalizedInventoryId = String(inventoryId || "").trim();
   if (!normalizedInventoryId) return;
 
@@ -562,7 +572,7 @@ export async function setTaskAssignedTechName(
   taskId: string,
   techName: string | null,
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("assign-tech"))) return;
   const normalizedTaskId = String(taskId || "").trim();
   if (!normalizedTaskId) return;
   const normalizedTechName = techName ? String(techName).trim() : null;
@@ -582,7 +592,7 @@ export async function setTaskAssignedTechName(
 export async function refreshInventoryMaintenanceStateForUnits(
   inventoryIdsInput: string[],
 ): Promise<void> {
-  await ensureMaintenanceAutomationSchema();
+  if (!(await ensureMaintenanceAutomationSchemaSafe("refresh-state"))) return;
   const ids = toIdList(inventoryIdsInput);
   if (ids.length === 0) return;
   await applyInventoryServiceState(ids);

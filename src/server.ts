@@ -17,6 +17,7 @@ import { apiReservationsRouter } from "./routes/reservations.js";
 import { apiTechAuthRouter } from "./routes/techAuth.js";
 import { migrateReservationsFromJsonFileIfNeeded } from "./lib/reservationsState.js";
 import { isSupabaseJsConfigured } from "./lib/supabaseClient.js";
+import { prisma } from "./lib/prisma.js";
 
 await migrateReservationsFromJsonFileIfNeeded();
 
@@ -24,6 +25,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
 const brandingLogoPath = process.env.BRANDING_LOGO_PATH?.trim() || "";
 const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY?.trim() || "";
+const transparentPngFallback = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE/wH+qWGW9QAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -42,12 +47,40 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/branding/logo", (_req, res) => {
-  if (!brandingLogoPath || !existsSync(brandingLogoPath)) {
-    res.status(404).json({ error: "Branding logo not found." });
-    return;
-  }
-  res.type("png");
-  createReadStream(brandingLogoPath).pipe(res);
+  void (async () => {
+    const rows = await prisma.$queryRaw<{ logoMime: string | null; logoBytes: Buffer | null }[]>`
+      SELECT "logoMime", "logoBytes"
+      FROM "AppSettings"
+      WHERE "id" = 'default'
+      LIMIT 1
+    `;
+    const settings = rows[0];
+    if (settings?.logoMime && settings.logoBytes && settings.logoBytes.length > 0) {
+      res.type(settings.logoMime).send(settings.logoBytes);
+      return;
+    }
+
+    if (!brandingLogoPath || !existsSync(brandingLogoPath)) {
+      res.type("png").send(transparentPngFallback);
+      return;
+    }
+    res.type("png");
+    const stream = createReadStream(brandingLogoPath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.type("png").send(transparentPngFallback);
+        return;
+      }
+      res.end();
+    });
+    stream.pipe(res);
+  })().catch(() => {
+    if (!res.headersSent) {
+      res.type("png").send(transparentPngFallback);
+      return;
+    }
+    res.end();
+  });
 });
 
 app.get("/api/public-config", (_req, res) => {
@@ -129,6 +162,10 @@ app.get("/techs", (req, res) => {
     return;
   }
   res.sendFile(join(publicDir, "techs.html"));
+});
+
+app.get("/shop", (_req, res) => {
+  res.redirect("/techs");
 });
 
 app.use(
