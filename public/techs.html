@@ -924,12 +924,18 @@
         if (id === "inspect-modal-backdrop") {
           activeInspectUnit = null;
           activeInspectionForm = null;
+          inspectionFormItems = [];
           inspectModalTitle.textContent = "Unit Inspection";
+          inspectItemList.innerHTML = "";
+          inspectFormEmpty.style.display = "none";
+          inspectFormEmpty.textContent = "";
           inspectHourMeter.value = "";
           clearInspectFollowupState();
           setMsg(inspectError, "");
           needsAttentionSection.style.display = "none";
           damagedSection.style.display = "none";
+          inspectSubmit.disabled = false;
+          inspectSubmit.textContent = "Complete Inspection";
         }
         if (id === "complete-modal-backdrop") {
           activeCompleteUnit = null;
@@ -961,38 +967,43 @@
         }
       }
 
-      async function openInspectModal(row) {
+      async function openInspectModal(row, inspectButton) {
+        const prevBtnLabel = inspectButton ? inspectButton.textContent : "";
+        if (inspectButton) {
+          inspectButton.disabled = true;
+          inspectButton.textContent = "Loading...";
+        }
+        setMsg(maintenanceError, "");
         activeInspectUnit = row;
         activeInspectionForm = null;
         inspectionFormItems = [];
         inspectModalTitle.textContent = "Unit Inspection";
-        $("inspect-unit-number").textContent = row.unitNumber ?? "-";
-        $("inspect-unit-type").textContent = row.asset?.type ?? "-";
-        $("inspect-unit-description").textContent = row.asset?.description ?? "-";
-        $("inspect-unit-status").textContent = row.status ?? "-";
-        $("inspect-unit-last-rented").textContent = formatLastRented(row.id);
         setMsg(inspectError, "");
         inspectHourMeter.value = "";
         clearInspectFollowupState();
-        openModal("inspect-modal-backdrop");
-        inspectSubmit.disabled = true;
-        inspectFormEmpty.style.display = "block";
-        inspectFormEmpty.textContent = "Loading inspection form...";
         try {
           await loadInspectionFormForUnit(row.id);
+          $("inspect-unit-number").textContent = row.unitNumber ?? "-";
+          $("inspect-unit-type").textContent = row.asset?.type ?? "-";
+          $("inspect-unit-description").textContent = row.asset?.description ?? "-";
+          $("inspect-unit-status").textContent = row.status ?? "-";
+          $("inspect-unit-last-rented").textContent = formatLastRented(row.id);
+          openModal("inspect-modal-backdrop");
           renderInspectForm();
         } catch (e) {
+          activeInspectUnit = null;
           inspectionFormItems = [];
           activeInspectionForm = null;
           inspectModalTitle.textContent = "Unit Inspection";
-          inspectFormEmpty.style.display = "block";
-          inspectFormEmpty.textContent =
-            "Unable to load this unit's inspection form. Check Admin form assignment.";
-          inspectHourWrap.style.display = "none";
-          needsAttentionSection.style.display = "none";
-          damagedSection.style.display = "none";
-          inspectSubmit.disabled = true;
-          setMsg(inspectError, String(e.message || e));
+          setMsg(
+            maintenanceError,
+            "Unable to load this unit's inspection form. " + String(e.message || e),
+          );
+        } finally {
+          if (inspectButton) {
+            inspectButton.disabled = false;
+            inspectButton.textContent = prevBtnLabel || "Inspect";
+          }
         }
       }
 
@@ -1255,9 +1266,9 @@
             </td>
           `;
           applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Last Rented", "Action"]);
-          tr.querySelector(".js-inspect").addEventListener("click", () => {
-            openInspectModal(row).catch((e) =>
-              setMsg(maintenanceError, "Failed to load inspection form: " + String(e.message || e)),
+          tr.querySelector(".js-inspect").addEventListener("click", (ev) => {
+            openInspectModal(row, ev.currentTarget).catch((e) =>
+              setMsg(maintenanceError, "Failed to open inspection: " + String(e.message || e)),
             );
           });
           tr.querySelector(".js-history").addEventListener("click", () => {
@@ -1567,8 +1578,17 @@
               },
             }),
           });
+          setMsg(inspectError, "");
           closeModal("inspect-modal-backdrop");
-          await refreshMaintenanceAndDueTasks();
+          try {
+            await refreshMaintenanceAndDueTasks();
+          } catch (refreshErr) {
+            setMsg(
+              maintenanceError,
+              "Inspection was saved, but the unit list could not be refreshed: " +
+                String(refreshErr instanceof Error ? refreshErr.message : refreshErr),
+            );
+          }
         } catch (e) {
           setMsg(inspectError, e instanceof Error ? e.message : String(e));
         } finally {

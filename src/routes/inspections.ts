@@ -12,8 +12,36 @@ import { appendRepairHistoryEntry } from "../lib/repairHistory.js";
 import { removeReturnedOnRentUnit } from "../lib/reservationsState.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
 import { getTechSession, requireTech } from "../lib/techAuth.js";
+import type { Asset, Inventory } from "@prisma/client";
 
 export const apiInspectionsRouter = Router();
+
+function jsonSafeInventoryForInspectionResponse(
+  unit: Inventory & { asset: Asset | null },
+  status: string,
+) {
+  return {
+    id: unit.id,
+    assetId: unit.assetId,
+    unitNumber: unit.unitNumber,
+    hours: unit.hours ?? null,
+    status,
+    downReason: unit.downReason,
+    inspectionRequired: unit.inspectionRequired,
+    lastInspectionCompletedAt: unit.lastInspectionCompletedAt,
+    createdAt: unit.createdAt,
+    asset: unit.asset
+      ? {
+          id: unit.asset.id,
+          asset: unit.asset.asset,
+          type: unit.asset.type,
+          description: unit.asset.description,
+          active: unit.asset.active,
+          inspectionFormId: unit.asset.inspectionFormId,
+        }
+      : null,
+  };
+}
 
 const STATUS_AVAILABLE = "Available";
 const STATUS_DOWN = "Down";
@@ -588,6 +616,7 @@ apiInspectionsRouter.get("/inventory/:inventoryId/form", requireTech, async (req
 });
 
 apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async (req, res) => {
+  try {
   const inventoryId =
     typeof req.params.inventoryId === "string" ? req.params.inventoryId.trim() : "";
   if (!inventoryId) {
@@ -856,11 +885,20 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
 
   res.json({
     ok: true,
-    unit: {
-      ...unit,
-      status: unitStatus,
-    },
+    unit: jsonSafeInventoryForInspectionResponse(unit as Inventory & { asset: Asset | null }, unitStatus),
   });
+  } catch (err) {
+    console.error("[inspections] POST /inventory/:inventoryId/complete failed:", err);
+    if (!res.headersSent) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({
+        error:
+          message && message.length > 0 && message.length < 300
+            ? message
+            : "Failed to save inspection.",
+      });
+    }
+  }
 });
 
 apiInspectionsRouter.get("/inventory/:inventoryId/required", async (req, res) => {
