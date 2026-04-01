@@ -186,6 +186,7 @@
           </div>
           <div class="row" style="margin-top:10px;">
             <button id="tech-entry-save" type="button">Save Tech Entry</button>
+            <button id="tech-entry-delete" class="danger" type="button" style="display:none;">Delete Tech</button>
           </div>
           <div id="tech-entry-info" class="hint-note" style="display:none; margin-top:10px;"></div>
           <div id="tech-entry-error" class="msg" style="display:none;"></div>
@@ -521,6 +522,7 @@
       const techEntryUsername = $("tech-entry-username");
       const techEntryPassword = $("tech-entry-password");
       const techEntrySave = $("tech-entry-save");
+      const techEntryDelete = $("tech-entry-delete");
       const techEntryInfo = $("tech-entry-info");
       const techEntryErr = $("tech-entry-error");
       const techEntrySuccess = $("tech-entry-success");
@@ -1399,6 +1401,8 @@
 
         techEntryInfo.style.display = "block";
         techEntryInfo.textContent = `${technicians.length} technician account(s) configured.`;
+
+        techEntryDelete.style.display = activeTech ? "inline-block" : "none";
       }
 
       function renderInspectionItemList() {
@@ -2095,7 +2099,37 @@
         setMsg(techEntryErr, "");
         setMsg(techEntrySuccess, "");
         renderTechEntryPanel();
+        techEntryDelete.style.display = "none";
         techEntryName.focus();
+      });
+
+      techEntryDelete.addEventListener("click", async () => {
+        if (!selectedTechnicianId) return;
+        const tech = selectedTechnician();
+        if (!tech) return;
+        const name = normalizeTechEntryName(tech);
+        const confirmed = await openConfirmDialog({
+          title: "Delete Technician",
+          text: `Delete technician "${name}" (${tech.username})? They will no longer be able to sign in to Techs.`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+        });
+        if (!confirmed) return;
+        setMsg(techEntryErr, "");
+        setMsg(techEntrySuccess, "");
+        techEntryDelete.disabled = true;
+        try {
+          await api(`/api/tech-auth/technicians/${encodeURIComponent(selectedTechnicianId)}`, {
+            method: "DELETE",
+          });
+          selectedTechnicianId = "";
+          await loadTechnicians();
+          setMsg(techEntrySuccess, "Technician deleted.");
+        } catch (e) {
+          setMsg(techEntryErr, String(e.message || e));
+        } finally {
+          techEntryDelete.disabled = false;
+        }
       });
 
       techEntrySave.addEventListener("click", async () => {

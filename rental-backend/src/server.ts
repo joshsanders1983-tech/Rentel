@@ -1,6 +1,6 @@
+import "./loadEnv.js";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createReadStream, existsSync } from "node:fs";
@@ -15,8 +15,10 @@ import { apiInspectionsRouter } from "./routes/inspections.js";
 import { apiMaintenanceAutomationRouter } from "./routes/maintenanceAutomation.js";
 import { apiReservationsRouter } from "./routes/reservations.js";
 import { apiTechAuthRouter } from "./routes/techAuth.js";
+import { migrateReservationsFromJsonFileIfNeeded } from "./lib/reservationsState.js";
+import { isSupabaseJsConfigured } from "./lib/supabaseClient.js";
 
-dotenv.config();
+await migrateReservationsFromJsonFileIfNeeded();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -36,6 +38,7 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "rental-backend",
     time: new Date().toISOString(),
+    supabaseJs: isSupabaseJsConfigured() ? "configured" : "not_configured",
   });
 });
 

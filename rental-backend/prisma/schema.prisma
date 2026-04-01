@@ -3,21 +3,21 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 /// Asset "types" used to rent units.
 /// Asset Entry fields: Asset, Type, Description.
 model Asset {
-  id          String        @id @default(cuid())
-  asset       String        @unique
-  type        String
-  description String?
-  active      Boolean       @default(true)
+  id               String          @id @default(cuid())
+  asset            String          @unique
+  type             String
+  description      String?
+  active           Boolean         @default(true)
   inspectionFormId String?
   inspectionForm   InspectionForm? @relation(fields: [inspectionFormId], references: [id], onDelete: SetNull)
-  createdAt   DateTime      @default(now())
+  createdAt        DateTime        @default(now())
 
   inventory Inventory[]
 
@@ -26,20 +26,20 @@ model Asset {
 
 /// Inventory Entry stores individual rentable units.
 model Inventory {
-  id         String   @id @default(cuid())
-  assetId    String
-  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  unitNumber String
-  hours      Float?
-  status     String   @default("AVAILABLE")
-  downReason String?
-  inspectionRequired         Boolean              @default(false)
-  lastInspectionCompletedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id                        String   @id @default(cuid())
+  assetId                   String
+  asset                     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  unitNumber                String
+  hours                     Float?
+  status                    String   @default("AVAILABLE")
+  downReason                String?
+  inspectionRequired        Boolean  @default(false)
+  lastInspectionCompletedAt DateTime?
+  createdAt                 DateTime @default(now())
 
   inspectionSubmissions InspectionSubmission[]
-  onRentHourSnapshots  OnRentHourSnapshot[]
-  repairHistoryEntries RepairHistoryEntry[]
+  onRentHourSnapshots     OnRentHourSnapshot[]
+  repairHistoryEntries    RepairHistoryEntry[]
 
   @@index([assetId])
   @@unique([unitNumber])
@@ -47,14 +47,14 @@ model Inventory {
 
 /// Service/tech repair timeline entries for a single cart.
 model RepairHistoryEntry {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   inventoryId String
   inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
   action      String
   details     String?
   techName    String?
   repairHours Float?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([inventoryId, createdAt])
 }
@@ -68,18 +68,18 @@ model InventoryStatusOption {
 
 /// Admin-defined checklist items used when inspecting returned units.
 model InspectionFormItem {
-  id        String   @id @default(cuid())
-  formId    String
-  form      InspectionForm @relation(fields: [formId], references: [id], onDelete: Cascade)
-  label     String
-  sortOrder Int      @default(0)
-  active    Boolean  @default(true)
-  allowOk             Boolean  @default(true)
-  allowNeedsAttention Boolean  @default(true)
-  allowDamaged        Boolean  @default(true)
-  allowNa             Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String         @id @default(cuid())
+  formId              String
+  form                InspectionForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  label               String
+  sortOrder           Int            @default(0)
+  active              Boolean        @default(true)
+  allowOk             Boolean        @default(true)
+  allowNeedsAttention Boolean        @default(true)
+  allowDamaged        Boolean        @default(true)
+  allowNa             Boolean        @default(true)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
   responseItems InspectionSubmissionItem[]
 
@@ -88,12 +88,12 @@ model InspectionFormItem {
 
 /// One completed inspection tied to a specific inventory unit.
 model InspectionSubmission {
-  id          String   @id @default(cuid())
-  inventoryId String
-  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
-  formId      String?
-  form        InspectionForm? @relation(fields: [formId], references: [id], onDelete: SetNull)
-  submittedAt DateTime @default(now())
+  id               String    @id @default(cuid())
+  inventoryId      String
+  inventory        Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  formId           String?
+  form             InspectionForm? @relation(fields: [formId], references: [id], onDelete: SetNull)
+  submittedAt      DateTime  @default(now())
   hourMeterReading Float?
 
   itemResults InspectionSubmissionItem[]
@@ -110,22 +110,22 @@ model InspectionForm {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  assets       Asset[]
-  items        InspectionFormItem[]
-  submissions  InspectionSubmission[]
+  assets      Asset[]
+  items       InspectionFormItem[]
+  submissions InspectionSubmission[]
 }
 
 /// Per-item values captured at inspection submission time.
 model InspectionSubmissionItem {
-  id            String   @id @default(cuid())
-  submissionId  String
-  formItemId    String?
-  labelSnapshot String
-  checked       Boolean
-  selectedOk             Boolean @default(false)
-  selectedNeedsAttention Boolean @default(false)
-  selectedDamaged        Boolean @default(false)
-  selectedNa             Boolean @default(false)
+  id                     String   @id @default(cuid())
+  submissionId           String
+  formItemId             String?
+  labelSnapshot          String
+  checked                Boolean
+  selectedOk             Boolean  @default(false)
+  selectedNeedsAttention Boolean  @default(false)
+  selectedDamaged        Boolean  @default(false)
+  selectedNa             Boolean  @default(false)
 
   submission InspectionSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   formItem   InspectionFormItem?  @relation(fields: [formItemId], references: [id], onDelete: SetNull)
@@ -144,10 +144,10 @@ model InspectionConfig {
 
 /// Captures a unit's hour meter when it transitions to On Rent.
 model OnRentHourSnapshot {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   inventoryId   String
   hoursAtOnRent Float?
-  capturedAt    DateTime @default(now())
+  capturedAt    DateTime  @default(now())
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 
@@ -165,4 +165,46 @@ model Technician {
   updatedAt DateTime @updatedAt
 
   @@index([active, techName])
+}
+
+/// Singleton row for reservation order number sequence.
+model ReservationMeta {
+  id           String @id
+  orderCounter Int    @default(0)
+}
+
+/// Last time each inventory unit was activated to On Rent (for auto-assign ordering).
+model LastRentedByUnit {
+  unitId          String @id
+  activatedAtIso  String
+}
+
+enum ReservationListKind {
+  RESERVATION
+  ON_RENT
+  RETURNED
+  POTENTIAL
+}
+
+/// Reservation / On Rent / Returned / Potential pipeline (shared across all app instances).
+model ReservationEntry {
+  id            String              @id
+  orderNumber   String
+  customerName  String
+  address       String
+  startDate     String
+  startTime     String
+  endDate       String
+  endTime       String
+  rentalType    String              @map("type")
+  quantity      Int
+  assignedUnits Json
+  groupKey      String
+  createdAt     DateTime
+  listKind      ReservationListKind
+  listEnteredAt DateTime            @default(now())
+  activatedAt   DateTime?
+  returnedAt    DateTime?
+
+  @@index([listKind, listEnteredAt])
 }

@@ -129,7 +129,7 @@ async function ensureDefaultTechnician(): Promise<void> {
   try {
     await prisma.$executeRaw`
       INSERT INTO "Technician" ("id", "techName", "username", "password", "active", "createdAt", "updatedAt")
-      VALUES (${id}, ${DEFAULT_TECH_NAME}, ${DEFAULT_TECH_USERNAME}, ${DEFAULT_TECH_PASSWORD}, 1, ${nowIso}, ${nowIso})
+      VALUES (${id}, ${DEFAULT_TECH_NAME}, ${DEFAULT_TECH_USERNAME}, ${DEFAULT_TECH_PASSWORD}, ${true}, ${nowIso}, ${nowIso})
     `;
   } catch {
     // Another request may have seeded the default technician first.
@@ -175,7 +175,7 @@ export async function listTechnicians(): Promise<TechnicianAccount[]> {
   const rows = await prisma.$queryRaw<TechnicianRow[]>`
     SELECT "id", "techName", "username", "password", "active", "createdAt", "updatedAt"
     FROM "Technician"
-    ORDER BY "techName" COLLATE NOCASE ASC, "username" COLLATE NOCASE ASC
+    ORDER BY LOWER("techName") ASC, LOWER("username") ASC
   `;
   return rows.map(rowToTechnicianAccount);
 }
@@ -207,13 +207,26 @@ export async function createTechnician(
   const id = `tech_${randomBytes(12).toString("hex")}`;
   await prisma.$executeRaw`
     INSERT INTO "Technician" ("id", "techName", "username", "password", "active", "createdAt", "updatedAt")
-    VALUES (${id}, ${techName}, ${username}, ${password}, 1, ${nowIso}, ${nowIso})
+    VALUES (${id}, ${techName}, ${username}, ${password}, ${true}, ${nowIso}, ${nowIso})
   `;
   const created = await getTechnicianById(id);
   if (!created) {
     throw new Error("Failed to create technician.");
   }
   return created;
+}
+
+export async function deleteTechnician(technicianIdInput: unknown): Promise<void> {
+  const technicianId = String(technicianIdInput ?? "").trim();
+  if (!technicianId) {
+    throw new Error("Technician id is required.");
+  }
+  const existing = await getTechnicianById(technicianId);
+  if (!existing) {
+    throw new Error("Technician not found.");
+  }
+  clearSessionsForTechnician(technicianId);
+  await prisma.technician.delete({ where: { id: technicianId } });
 }
 
 export async function updateTechnician(
@@ -257,7 +270,7 @@ export async function updateTechnician(
       "techName" = ${techName},
       "username" = ${username},
       "password" = ${password},
-      "active" = 1,
+      "active" = ${true},
       "updatedAt" = ${nowIso}
     WHERE "id" = ${technicianId}
   `;
@@ -283,7 +296,7 @@ export async function authenticateTechnician(
     SELECT "id", "techName", "username", "password", "active", "createdAt", "updatedAt"
     FROM "Technician"
     WHERE "username" = ${username}
-      AND "active" = 1
+      AND "active" = ${true}
     LIMIT 1
   `;
   const firstMatch = matches[0];

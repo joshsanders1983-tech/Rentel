@@ -5,6 +5,7 @@ import {
   clearCurrentTechSession,
   createTechSession,
   createTechnician,
+  deleteTechnician,
   getTechSession,
   listTechnicians,
   setTechSessionCookie,
@@ -97,5 +98,23 @@ apiTechAuthRouter.patch("/technicians/:id", requireAdmin, async (req, res) => {
     res.status(400).json({
       error: message || "Tech name, username, and password are required.",
     });
+  }
+});
+
+apiTechAuthRouter.delete("/technicians/:id", requireAdmin, async (req, res) => {
+  try {
+    await deleteTechnician(req.params.id);
+    res.status(204).send();
+  } catch (err) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as { message?: unknown }).message ?? "")
+        : "";
+    const lowered = message.toLowerCase();
+    if (lowered.includes("not found")) {
+      res.status(404).json({ error: message || "Technician not found." });
+      return;
+    }
+    res.status(400).json({ error: message || "Unable to delete technician." });
   }
 });

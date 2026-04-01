@@ -67,10 +67,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function intBool(value: boolean): number {
-  return value ? 1 : 0;
-}
-
 function toIdList(values: string[]): string[] {
   return Array.from(
     new Set(
@@ -99,8 +95,10 @@ async function run(sql: string, ...params: unknown[]): Promise<void> {
   await prisma.$executeRawUnsafe(sql, ...params);
 }
 
-function placeholders(count: number): string {
-  return new Array(count).fill("?").join(",");
+/** PostgreSQL positional parameters for `$queryRawUnsafe` / `$executeRawUnsafe`. */
+export function pgPlaceholders(count: number): string {
+  if (count <= 0) return "";
+  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
 }
 
 export async function ensureMaintenanceAutomationSchema(): Promise<void> {
@@ -184,9 +182,10 @@ async function ensureCounterRows(inventoryIds: string[]): Promise<void> {
   for (const inventoryId of ids) {
     await run(
       `
-      INSERT OR IGNORE INTO "InventoryMaintenanceCounter"
+      INSERT INTO "InventoryMaintenanceCounter"
       ("inventoryId", "rentalCycleCount", "updatedAt")
-      VALUES (?, 0, ?)
+      VALUES ($1, 0, $2)
+      ON CONFLICT ("inventoryId") DO NOTHING
       `,
       inventoryId,
       now,
@@ -209,7 +208,7 @@ async function getInventoryRows(inventoryIds: string[]): Promise<InventoryRow[]>
       "inspectionRequired",
       "downReason"
     FROM "Inventory"
-    WHERE "id" IN (${placeholders(ids.length)})
+    WHERE "id" IN (${pgPlaceholders(ids.length)})
     `,
     ...ids,
   );
@@ -258,7 +257,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
     `
     SELECT "inventoryId", "reason"
     FROM "MaintenanceTask"
-    WHERE "inventoryId" IN (${placeholders(ids.length)})
+    WHERE "inventoryId" IN (${pgPlaceholders(ids.length)})
       AND "status" != 'COMPLETED'
     ORDER BY "createdAt" ASC
     `,
@@ -287,7 +286,7 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
         updates.status = STATUS_DOWN;
       }
       if (!shouldProtectLiveRental) {
-        updates.inspectionRequired = intBool(true);
+        updates.inspectionRequired = true;
       }
       if (inventory.downReason !== nextReason) {
         updates.downReason = nextReason;
@@ -308,10 +307,12 @@ async function applyInventoryServiceState(inventoryIds: string[]): Promise<void>
     if (Object.keys(updates).length === 0) continue;
 
     const columns = Object.keys(updates);
-    const assignments = columns.map((column) => `"${column}" = ?`).join(", ");
+    const assignments = columns
+      .map((column, idx) => `"${column}" = $${idx + 1}`)
+      .join(", ");
     const values = columns.map((column) => updates[column]);
     await run(
-      `UPDATE "Inventory" SET ${assignments} WHERE "id" = ?`,
+      `UPDATE "Inventory" SET ${assignments} WHERE "id" = $${columns.length + 1}`,
       ...values,
       inventory.id,
     );
@@ -358,7 +359,7 @@ export async function evaluateMaintenanceRulesForUnits(
     `
     SELECT "ruleId", "assetId"
     FROM "MaintenanceRuleAssetScope"
-    WHERE "ruleId" IN (${placeholders(ruleIds.length)})
+    WHERE "ruleId" IN (${pgPlaceholders(ruleIds.length)})
     `,
     ...ruleIds,
   );
@@ -366,7 +367,7 @@ export async function evaluateMaintenanceRulesForUnits(
     `
     SELECT "ruleId", "inventoryId"
     FROM "MaintenanceRuleUnitScope"
-    WHERE "ruleId" IN (${placeholders(ruleIds.length)})
+    WHERE "ruleId" IN (${pgPlaceholders(ruleIds.length)})
     `,
     ...ruleIds,
   );
@@ -375,7 +376,7 @@ export async function evaluateMaintenanceRulesForUnits(
     `
     SELECT "inventoryId", "rentalCycleCount"
     FROM "InventoryMaintenanceCounter"
-    WHERE "inventoryId" IN (${placeholders(inventoryIds.length)})
+    WHERE "inventoryId" IN (${pgPlaceholders(inventoryIds.length)})
     `,
     ...inventoryIds,
   );
@@ -421,7 +422,7 @@ export async function evaluateMaintenanceRulesForUnits(
         const dueValue = idx * intervalValue;
         await run(
           `
-          INSERT OR IGNORE INTO "MaintenanceTask" (
+          INSERT INTO "MaintenanceTask" (
             "id",
             "ruleId",
             "inventoryId",
@@ -434,7 +435,8 @@ export async function evaluateMaintenanceRulesForUnits(
             "assignedTechName",
             "createdAt",
             "updatedAt"
-          ) VALUES (?, ?, ?, ?, ?, ?, 'DUE', ?, ?, NULL, ?, ?)
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'DUE', $7, $8, NULL, $9, $10)
+          ON CONFLICT ("ruleId", "inventoryId", "triggerType", "dueValue") DO NOTHING
           `,
           randomUUID(),
           rule.id,
@@ -474,8 +476,8 @@ export async function incrementRentalCycleCounters(
       `
       UPDATE "InventoryMaintenanceCounter"
       SET "rentalCycleCount" = "rentalCycleCount" + 1,
-          "updatedAt" = ?
-      WHERE "inventoryId" = ?
+          "updatedAt" = $1
+      WHERE "inventoryId" = $2
       `,
       updatedAt,
       inventoryId,
@@ -499,9 +501,9 @@ export async function completeOpenMaintenanceTasksForInspection(
     `
     SELECT "id", "inventoryId", "inspectionFormId", "createdAt", "status"
     FROM "MaintenanceTask"
-    WHERE "inventoryId" = ?
+    WHERE "inventoryId" = $1
       AND "status" != 'COMPLETED'
-      AND "createdAt" <= ?
+      AND "createdAt" <= $2
     `,
     normalizedInventoryId,
     submittedAtIso,
@@ -515,10 +517,10 @@ export async function completeOpenMaintenanceTasksForInspection(
       `
       UPDATE "MaintenanceTask"
       SET "status" = 'COMPLETED',
-          "completedAt" = ?,
-          "completionInspectionSubmissionId" = ?,
-          "updatedAt" = ?
-      WHERE "id" = ?
+          "completedAt" = $1,
+          "completionInspectionSubmissionId" = $2,
+          "updatedAt" = $3
+      WHERE "id" = $4
       `,
       submittedAtIso,
       inspectionSubmissionId,
@@ -543,9 +545,9 @@ export async function completeOpenMaintenanceTasksForInventory(
     `
     UPDATE "MaintenanceTask"
     SET "status" = 'COMPLETED',
-        "completedAt" = ?,
-        "updatedAt" = ?
-    WHERE "inventoryId" = ?
+        "completedAt" = $1,
+        "updatedAt" = $2
+    WHERE "inventoryId" = $3
       AND "status" != 'COMPLETED'
     `,
     completedAt,
@@ -567,9 +569,9 @@ export async function setTaskAssignedTechName(
   await run(
     `
     UPDATE "MaintenanceTask"
-    SET "assignedTechName" = ?,
-        "updatedAt" = ?
-    WHERE "id" = ?
+    SET "assignedTechName" = $1,
+        "updatedAt" = $2
+    WHERE "id" = $3
     `,
     normalizedTechName,
     nowIso(),

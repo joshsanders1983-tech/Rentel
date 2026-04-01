@@ -37,13 +37,13 @@ function parseLocalDateTime(dateText: string, timeText: string) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function buildShortageMessage(input: {
+async function buildShortageMessage(input: {
   type: string;
   quantity: number;
   assignedCount: number;
   shortBy: number;
 }) {
-  const snapshot = getReservationsSnapshot();
+  const snapshot = await getReservationsSnapshot();
   const targetType = upperText(input.type);
 
   const matchingReturnTimes: Date[] = [];
@@ -74,7 +74,7 @@ function buildShortageMessage(input: {
 }
 
 apiReservationsRouter.get("/", async (_req, res) => {
-  res.json(getReservationsSnapshot());
+  res.json(await getReservationsSnapshot());
 });
 
 apiReservationsRouter.post("/", async (req, res) => {
@@ -134,7 +134,7 @@ apiReservationsRouter.post("/", async (req, res) => {
     return;
   }
 
-  const lastRentedByUnit = getLastRentedByUnit();
+  const lastRentedByUnit = await getLastRentedByUnit();
   const manualSet = new Set(manualUnits.map((u) => u.id));
   const targetType = upperText(type);
 
@@ -159,7 +159,7 @@ apiReservationsRouter.post("/", async (req, res) => {
   if (assigned.length < quantity) {
     const shortBy = quantity - assigned.length;
     res.status(400).json({
-      error: buildShortageMessage({
+      error: await buildShortageMessage({
         type,
         quantity,
         assignedCount: assigned.length,
@@ -175,7 +175,7 @@ apiReservationsRouter.post("/", async (req, res) => {
     data: { status: STATUS_RESERVED, inspectionRequired: false },
   });
 
-  const reservation = addReservation({
+  const reservation = await addReservation({
     customerName,
     address,
     startDate,
@@ -205,7 +205,7 @@ apiReservationsRouter.post("/", async (req, res) => {
 apiReservationsRouter.post("/:id/activate", async (req, res) => {
   const { id } = req.params;
   const activatedAt = new Date().toISOString();
-  const activated = activateReservation(id, activatedAt);
+  const activated = await activateReservation(id, activatedAt);
   if (!activated) {
     res.status(404).json({ error: "Reservation not found." });
     return;
@@ -222,7 +222,7 @@ apiReservationsRouter.post("/:id/activate", async (req, res) => {
 apiReservationsRouter.post("/on-rent/:id/end-now", async (req, res) => {
   const { id } = req.params;
   const returnedAt = new Date().toISOString();
-  const ended = endOnRentBatch(id, returnedAt);
+  const ended = await endOnRentBatch(id, returnedAt);
   if (!ended) {
     res.status(404).json({ error: "On Rent entry not found." });
     return;
@@ -254,7 +254,7 @@ apiReservationsRouter.post("/on-rent/:id/end-now", async (req, res) => {
 
 apiReservationsRouter.post("/returned/:id/restore", async (req, res) => {
   const { id } = req.params;
-  const restored = restoreReturnedOnRentBatch(id);
+  const restored = await restoreReturnedOnRentBatch(id);
   if (!restored) {
     res.status(404).json({ error: "Returned entry not found." });
     return;
@@ -299,7 +299,7 @@ apiReservationsRouter.post("/on-rent/:id/swap-unit", async (req, res) => {
     return;
   }
 
-  const snapshot = getReservationsSnapshot();
+  const snapshot = await getReservationsSnapshot();
   const onRentOrder = snapshot.onRent.find((entry) => entry.id === id);
   if (!onRentOrder) {
     res.status(404).json({ error: "On Rent entry not found." });
@@ -336,7 +336,7 @@ apiReservationsRouter.post("/on-rent/:id/swap-unit", async (req, res) => {
   }
 
   const swappedAt = new Date().toISOString();
-  const updated = swapOnRentUnit(
+  const updated = await swapOnRentUnit(
     id,
     removeUnitId,
     {
@@ -385,7 +385,7 @@ apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
     return;
   }
 
-  const snapshot = getReservationsSnapshot();
+  const snapshot = await getReservationsSnapshot();
   const reservation = snapshot.reservations.find((r) => r.id === id);
   if (!reservation) {
     res.status(404).json({ error: "Reservation not found." });
@@ -411,7 +411,7 @@ apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
     return;
   }
 
-  const updated = swapReservationUnit(id, removeUnitId, {
+  const updated = await swapReservationUnit(id, removeUnitId, {
     unitId: addUnit.id,
     unitNumber: addUnit.unitNumber,
     type: addUnit.asset.type,
@@ -436,7 +436,7 @@ apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
 
 apiReservationsRouter.post("/:id/cancel", async (req, res) => {
   const { id } = req.params;
-  const canceled = cancelReservation(id);
+  const canceled = await cancelReservation(id);
   if (!canceled) {
     res.status(404).json({ error: "Reservation not found." });
     return;
@@ -453,7 +453,7 @@ apiReservationsRouter.post("/:id/cancel", async (req, res) => {
 
 apiReservationsRouter.post("/:id/potential", async (req, res) => {
   const { id } = req.params;
-  const potential = moveReservationToPotential(id);
+  const potential = await moveReservationToPotential(id);
   if (!potential) {
     res.status(404).json({ error: "Reservation not found." });
     return;

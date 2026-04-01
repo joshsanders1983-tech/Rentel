@@ -832,7 +832,7 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
   const unitStatus = normalizeStatus(unit.status);
 
   if (unitStatus === STATUS_AVAILABLE) {
-    removeReturnedOnRentUnit(inventoryId);
+    await removeReturnedOnRentUnit(inventoryId);
   }
 
   res.json({

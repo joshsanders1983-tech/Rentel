@@ -5,6 +5,7 @@ import {
   ensureMaintenanceAutomationSchema,
   evaluateMaintenanceRulesForAllUnits,
   evaluateMaintenanceRulesForUnits,
+  pgPlaceholders,
   refreshInventoryMaintenanceStateForUnits,
   setTaskAssignedTechName,
 } from "../lib/maintenanceAutomation.js";
@@ -74,10 +75,6 @@ async function run(sql: string, ...params: unknown[]): Promise<void> {
   await prisma.$executeRawUnsafe(sql, ...params);
 }
 
-function placeholders(count: number): string {
-  return new Array(count).fill("?").join(",");
-}
-
 async function listRules() {
   await ensureMaintenanceAutomationSchema();
   const rules = await queryRows<RuleRow>(
@@ -105,7 +102,7 @@ async function listRules() {
     `
     SELECT "ruleId", "assetId"
     FROM "MaintenanceRuleAssetScope"
-    WHERE "ruleId" IN (${placeholders(ruleIds.length)})
+    WHERE "ruleId" IN (${pgPlaceholders(ruleIds.length)})
     `,
     ...ruleIds,
   );
@@ -113,7 +110,7 @@ async function listRules() {
     `
     SELECT "ruleId", "inventoryId"
     FROM "MaintenanceRuleUnitScope"
-    WHERE "ruleId" IN (${placeholders(ruleIds.length)})
+    WHERE "ruleId" IN (${pgPlaceholders(ruleIds.length)})
     `,
     ...ruleIds,
   );
@@ -166,7 +163,7 @@ async function inventoryIdsForRuleScope(
       `
       SELECT "id"
       FROM "Inventory"
-      WHERE "assetId" IN (${placeholders(assetIds.length)})
+      WHERE "assetId" IN (${pgPlaceholders(assetIds.length)})
       `,
       ...assetIds,
     );
@@ -181,7 +178,7 @@ async function validateAssetIds(assetIds: string[]): Promise<boolean> {
     `
     SELECT "id"
     FROM "Asset"
-    WHERE "id" IN (${placeholders(assetIds.length)}) AND "active" = 1
+    WHERE "id" IN (${pgPlaceholders(assetIds.length)}) AND "active" = true
     `,
     ...assetIds,
   );
@@ -194,7 +191,7 @@ async function validateUnitIds(unitIds: string[]): Promise<boolean> {
     `
     SELECT "id"
     FROM "Inventory"
-    WHERE "id" IN (${placeholders(unitIds.length)})
+    WHERE "id" IN (${pgPlaceholders(unitIds.length)})
     `,
     ...unitIds,
   );
@@ -204,7 +201,7 @@ async function validateUnitIds(unitIds: string[]): Promise<boolean> {
 async function validateInspectionFormId(formId: string | null): Promise<boolean> {
   if (!formId) return true;
   const rows = await queryRows<{ id: string }>(
-    `SELECT "id" FROM "InspectionForm" WHERE "id" = ?`,
+    `SELECT "id" FROM "InspectionForm" WHERE "id" = $1`,
     formId,
   );
   return rows.length === 1;
@@ -284,7 +281,7 @@ apiMaintenanceAutomationRouter.post("/rules", requireAdmin, async (req, res) => 
       "active",
       "createdAt",
       "updatedAt"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `,
     ruleId,
     name,
@@ -301,8 +298,9 @@ apiMaintenanceAutomationRouter.post("/rules", requireAdmin, async (req, res) => 
   for (const assetId of assetIds) {
     await run(
       `
-      INSERT OR IGNORE INTO "MaintenanceRuleAssetScope" ("id", "ruleId", "assetId")
-      VALUES (?, ?, ?)
+      INSERT INTO "MaintenanceRuleAssetScope" ("id", "ruleId", "assetId")
+      VALUES ($1, $2, $3)
+      ON CONFLICT ("ruleId", "assetId") DO NOTHING
       `,
       randomUUID(),
       ruleId,
@@ -312,8 +310,9 @@ apiMaintenanceAutomationRouter.post("/rules", requireAdmin, async (req, res) => 
   for (const inventoryId of unitIds) {
     await run(
       `
-      INSERT OR IGNORE INTO "MaintenanceRuleUnitScope" ("id", "ruleId", "inventoryId")
-      VALUES (?, ?, ?)
+      INSERT INTO "MaintenanceRuleUnitScope" ("id", "ruleId", "inventoryId")
+      VALUES ($1, $2, $3)
+      ON CONFLICT ("ruleId", "inventoryId") DO NOTHING
       `,
       randomUUID(),
       ruleId,
@@ -351,7 +350,7 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
       "createdAt",
       "updatedAt"
     FROM "MaintenanceRule"
-    WHERE "id" = ?
+    WHERE "id" = $1
     `,
     ruleId,
   );
@@ -362,11 +361,11 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
   }
 
   const currentAssetRows = await queryRows<{ assetId: string }>(
-    `SELECT "assetId" FROM "MaintenanceRuleAssetScope" WHERE "ruleId" = ?`,
+    `SELECT "assetId" FROM "MaintenanceRuleAssetScope" WHERE "ruleId" = $1`,
     ruleId,
   );
   const currentUnitRows = await queryRows<{ inventoryId: string }>(
-    `SELECT "inventoryId" FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = ?`,
+    `SELECT "inventoryId" FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = $1`,
     ruleId,
   );
   const currentAssetIds = currentAssetRows.map((row) => row.assetId);
@@ -432,15 +431,15 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
     `
     UPDATE "MaintenanceRule"
     SET
-      "name" = ?,
-      "serviceLabel" = ?,
-      "triggerType" = ?,
-      "intervalValue" = ?,
-      "scopeType" = ?,
-      "inspectionFormId" = ?,
-      "active" = ?,
-      "updatedAt" = ?
-    WHERE "id" = ?
+      "name" = $1,
+      "serviceLabel" = $2,
+      "triggerType" = $3,
+      "intervalValue" = $4,
+      "scopeType" = $5,
+      "inspectionFormId" = $6,
+      "active" = $7,
+      "updatedAt" = $8
+    WHERE "id" = $9
     `,
     nextName,
     nextServiceLabel,
@@ -453,13 +452,14 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
     ruleId,
   );
 
-  await run(`DELETE FROM "MaintenanceRuleAssetScope" WHERE "ruleId" = ?`, ruleId);
-  await run(`DELETE FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = ?`, ruleId);
+  await run(`DELETE FROM "MaintenanceRuleAssetScope" WHERE "ruleId" = $1`, ruleId);
+  await run(`DELETE FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = $1`, ruleId);
   for (const assetId of nextAssetIds) {
     await run(
       `
-      INSERT OR IGNORE INTO "MaintenanceRuleAssetScope" ("id", "ruleId", "assetId")
-      VALUES (?, ?, ?)
+      INSERT INTO "MaintenanceRuleAssetScope" ("id", "ruleId", "assetId")
+      VALUES ($1, $2, $3)
+      ON CONFLICT ("ruleId", "assetId") DO NOTHING
       `,
       randomUUID(),
       ruleId,
@@ -469,8 +469,9 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
   for (const inventoryId of nextUnitIds) {
     await run(
       `
-      INSERT OR IGNORE INTO "MaintenanceRuleUnitScope" ("id", "ruleId", "inventoryId")
-      VALUES (?, ?, ?)
+      INSERT INTO "MaintenanceRuleUnitScope" ("id", "ruleId", "inventoryId")
+      VALUES ($1, $2, $3)
+      ON CONFLICT ("ruleId", "inventoryId") DO NOTHING
       `,
       randomUUID(),
       ruleId,
@@ -481,7 +482,7 @@ apiMaintenanceAutomationRouter.patch("/rules/:id", requireAdmin, async (req, res
   await run(
     `
     DELETE FROM "MaintenanceTask"
-    WHERE "ruleId" = ?
+    WHERE "ruleId" = $1
       AND "status" != 'COMPLETED'
     `,
     ruleId,
@@ -514,7 +515,7 @@ apiMaintenanceAutomationRouter.delete("/rules/:id", requireAdmin, async (req, re
   }
 
   const existingRows = await queryRows<{ id: string }>(
-    `SELECT "id" FROM "MaintenanceRule" WHERE "id" = ?`,
+    `SELECT "id" FROM "MaintenanceRule" WHERE "id" = $1`,
     ruleId,
   );
   if (existingRows.length === 0) {
@@ -523,11 +524,11 @@ apiMaintenanceAutomationRouter.delete("/rules/:id", requireAdmin, async (req, re
   }
 
   const affectedByTasks = await queryRows<{ inventoryId: string }>(
-    `SELECT DISTINCT "inventoryId" FROM "MaintenanceTask" WHERE "ruleId" = ?`,
+    `SELECT DISTINCT "inventoryId" FROM "MaintenanceTask" WHERE "ruleId" = $1`,
     ruleId,
   );
   const affectedByUnits = await queryRows<{ inventoryId: string }>(
-    `SELECT "inventoryId" FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = ?`,
+    `SELECT "inventoryId" FROM "MaintenanceRuleUnitScope" WHERE "ruleId" = $1`,
     ruleId,
   );
   const affectedByAssets = await queryRows<{ id: string }>(
@@ -536,7 +537,7 @@ apiMaintenanceAutomationRouter.delete("/rules/:id", requireAdmin, async (req, re
     FROM "Inventory"
     INNER JOIN "MaintenanceRuleAssetScope"
       ON "MaintenanceRuleAssetScope"."assetId" = "Inventory"."assetId"
-    WHERE "MaintenanceRuleAssetScope"."ruleId" = ?
+    WHERE "MaintenanceRuleAssetScope"."ruleId" = $1
     `,
     ruleId,
   );
@@ -548,7 +549,7 @@ apiMaintenanceAutomationRouter.delete("/rules/:id", requireAdmin, async (req, re
     ]),
   );
 
-  await run(`DELETE FROM "MaintenanceRule" WHERE "id" = ?`, ruleId);
+  await run(`DELETE FROM "MaintenanceRule" WHERE "id" = $1`, ruleId);
   await refreshInventoryMaintenanceStateForUnits(affectedInventoryIds);
   res.status(204).send();
 });
@@ -655,7 +656,7 @@ apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireAdmin, async (
     `
     SELECT "id", "inventoryId", "status", "createdAt", "inspectionFormId"
     FROM "MaintenanceTask"
-    WHERE "id" = ?
+    WHERE "id" = $1
     `,
     taskId,
   );
@@ -677,8 +678,8 @@ apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireAdmin, async (
     `
     SELECT "id", "formId", "submittedAt"
     FROM "InspectionSubmission"
-    WHERE "inventoryId" = ?
-      AND "submittedAt" >= ?
+    WHERE "inventoryId" = $1
+      AND "submittedAt" >= $2
     ORDER BY "submittedAt" DESC
     LIMIT 1
     `,
@@ -709,10 +710,10 @@ apiMaintenanceAutomationRouter.post("/tasks/:id/complete", requireAdmin, async (
     `
     UPDATE "MaintenanceTask"
     SET "status" = 'COMPLETED',
-        "completedAt" = ?,
-        "completionInspectionSubmissionId" = ?,
-        "updatedAt" = ?
-    WHERE "id" = ?
+        "completedAt" = $1,
+        "completionInspectionSubmissionId" = $2,
+        "updatedAt" = $3
+    WHERE "id" = $4
     `,
     completedAt,
     latestInspection.id,
