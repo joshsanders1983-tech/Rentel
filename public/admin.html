@@ -1588,18 +1588,40 @@
       }
 
       async function loadAdminData() {
+        const failures = [];
+        const settle = async (label, task) => {
+          try {
+            await task();
+          } catch (e) {
+            failures.push(`${label}: ${String(e && e.message ? e.message : e)}`);
+          }
+        };
+
+        // Load core inventory data first so the main table always appears.
+        await Promise.all([settle("Assets", loadAssets), settle("Inventory", loadInventory)]);
+
+        // Load secondary admin modules without blocking inventory visibility.
         await Promise.all([
-          loadAssets(),
-          loadStatusOptions(),
-          loadInspectionForms(),
-          loadInspectionAssetMappings(),
-          loadTechnicians(),
-          loadAdminSettings(),
+          settle("Status options", loadStatusOptions),
+          settle("Inspection forms", loadInspectionForms),
+          settle("Inspection mappings", loadInspectionAssetMappings),
+          settle("Technicians", loadTechnicians),
+          settle("Admin settings", loadAdminSettings),
+          settle("Maintenance rules", loadMaintenanceRules),
         ]);
-        await loadInspectionFormItems();
+
+        await settle("Inspection items", loadInspectionFormItems);
         renderInspectionAssignmentSummary();
         resetMaintenanceRuleForm();
-        await Promise.all([loadInventory(), loadMaintenanceRules()]);
+
+        if (failures.length > 0) {
+          setMsg(
+            adminAuthErr,
+            `Some admin sections failed to load, but inventory is still available:\n- ${failures.join("\n- ")}`,
+          );
+        } else {
+          setMsg(adminAuthErr, "");
+        }
       }
 
       $("admin-login").addEventListener("click", async () => {

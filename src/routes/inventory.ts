@@ -19,6 +19,18 @@ import { getTechSession, requireTech } from "../lib/techAuth.js";
 
 export const apiInventoryRouter = Router();
 const DEFAULT_NEW_UNIT_STATUS = "Available";
+const INVENTORY_CACHE_TTL_MS = 2000;
+
+let inventoryCache:
+  | {
+      expiresAt: number;
+      payload: unknown[];
+    }
+  | null = null;
+
+function invalidateInventoryCache() {
+  inventoryCache = null;
+}
 
 function upperText(value: unknown) {
   return String(value ?? "").trim().toUpperCase();
@@ -117,6 +129,10 @@ function parseDownReasonField(
 }
 
 apiInventoryRouter.get("/", async (_req, res) => {
+  if (inventoryCache && inventoryCache.expiresAt > Date.now()) {
+    res.json(inventoryCache.payload);
+    return;
+  }
   const rows = await prisma.inventory.findMany({
     include: {
       asset: true,
@@ -135,15 +151,18 @@ apiInventoryRouter.get("/", async (_req, res) => {
     },
     orderBy: { createdAt: "desc" },
   });
-  res.json(
-    rows.map((row) => ({
-      ...row,
-      status: normalizeStatus(row.status),
-      downReason:
-        (row as unknown as { downReason?: string | null }).downReason ??
-        deriveDownReason(row),
-    })),
-  );
+  const payload = rows.map((row) => ({
+    ...row,
+    status: normalizeStatus(row.status),
+    downReason:
+      (row as unknown as { downReason?: string | null }).downReason ??
+      deriveDownReason(row),
+  }));
+  inventoryCache = {
+    expiresAt: Date.now() + INVENTORY_CACHE_TTL_MS,
+    payload,
+  };
+  res.json(payload);
 });
 
 apiInventoryRouter.post("/", requireAdmin, async (req, res) => {
@@ -193,6 +212,7 @@ apiInventoryRouter.post("/", requireAdmin, async (req, res) => {
       where: { id: created.id },
       include: { asset: true },
     });
+    invalidateInventoryCache();
     res.status(201).json(hydrated || created);
   } catch (err: unknown) {
     if (
@@ -324,6 +344,7 @@ apiInventoryRouter.patch("/:id", requireAdmin, async (req, res) => {
       where: { id: updated.id },
       include: { asset: true },
     });
+    invalidateInventoryCache();
     res.json(hydrated || updated);
   } catch (err: unknown) {
     if (
@@ -398,6 +419,7 @@ apiInventoryRouter.post("/manual-down", requireTech, async (req, res) => {
     include: { asset: true },
   });
   const row = hydrated || updated;
+  invalidateInventoryCache();
 
   res.json({
     ...row,
@@ -487,6 +509,7 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
     include: { asset: true },
   });
   const row = hydrated || updated;
+  invalidateInventoryCache();
 
   res.json({
     ...row,
@@ -557,6 +580,7 @@ apiInventoryRouter.delete("/:id", requireAdmin, async (req, res) => {
   }
 
   await prisma.inventory.delete({ where: { id } });
+  invalidateInventoryCache();
   res.status(204).send();
 });
 
