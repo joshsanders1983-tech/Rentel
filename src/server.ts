@@ -17,9 +17,11 @@ import { apiReservationsRouter } from "./routes/reservations.js";
 import { apiTechAuthRouter } from "./routes/techAuth.js";
 import { migrateReservationsFromJsonFileIfNeeded } from "./lib/reservationsState.js";
 import { isSupabaseJsConfigured } from "./lib/supabaseClient.js";
+import { ensurePostgresSchemaCompat } from "./lib/ensurePostgresSchemaCompat.js";
 import { prisma } from "./lib/prisma.js";
 
 await migrateReservationsFromJsonFileIfNeeded();
+await ensurePostgresSchemaCompat();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
