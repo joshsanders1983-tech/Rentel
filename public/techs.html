@@ -93,7 +93,6 @@
       <div class="brand">
         <div>
           <h1>Shop</h1>
-          <div class="sub">Maintenance queues and shop workflows for technicians.</div>
         </div>
       </div>
       <nav class="top-nav" aria-label="Primary">
@@ -185,6 +184,20 @@
           </div>
           <div id="manual-down-error" class="msg" style="display:none;"></div>
           <div id="manual-down-success" class="msg ok" style="display:none;"></div>
+        </div>
+
+        <div class="card card-half techs-side-card">
+          <h2>Unit History</h2>
+          <div class="field-grid">
+            <div>
+              <label class="field-label" for="unit-history-unit">Unit #</label>
+              <input class="field-input" id="unit-history-unit" type="text" />
+            </div>
+          </div>
+          <div class="row buttons" style="margin-top:10px;">
+            <button class="btn secondary" id="unit-history-view" type="button">View History</button>
+          </div>
+          <div id="unit-history-error" class="msg" style="display:none;"></div>
         </div>
 
         <div class="card card-half techs-side-card">
@@ -293,6 +306,19 @@
     <div class="modal-backdrop" id="history-modal-backdrop" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title" style="max-width:780px;">
         <h3 id="history-modal-title">History</h3>
+        <h4 class="history-subheading" style="margin:0.75rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Damage history</h4>
+        <div id="damage-history-empty" class="empty" style="display:none;"></div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:200px;">Date</th>
+              <th style="width:120px;">Action</th>
+              <th>Details</th>
+              <th style="width:140px;">Tech</th>
+            </tr>
+          </thead>
+          <tbody id="damage-history-body"></tbody>
+        </table>
         <h4 class="history-subheading" style="margin:0.75rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Repair history</h4>
         <div id="history-empty" class="empty" style="display:none;"></div>
         <table>
@@ -351,11 +377,16 @@
       const completeModalTitle = $("complete-modal-title");
       const completeError = $("complete-error");
       const historyModalTitle = $("history-modal-title");
+      const damageHistoryBody = $("damage-history-body");
+      const damageHistoryEmpty = $("damage-history-empty");
       const historyBody = $("history-body");
       const historyEmpty = $("history-empty");
       const serviceHistoryBody = $("service-history-body");
       const serviceHistoryEmpty = $("service-history-empty");
       const historyError = $("history-error");
+      const unitHistoryUnit = $("unit-history-unit");
+      const unitHistoryView = $("unit-history-view");
+      const unitHistoryError = $("unit-history-error");
       const dueTaskFilter = $("due-task-filter");
       const dueTasksRefreshBtn = $("due-tasks-refresh");
       const dueTaskErr = $("due-task-error");
@@ -379,6 +410,7 @@
       const techSessionName = $("tech-session-name");
 
       let lastRentedByUnit = {};
+      let allInventoryRows = [];
       let returnedRows = [];
       let downRows = [];
       let activeInspectionForm = null;
@@ -661,6 +693,32 @@
         }
       }
 
+      function isDamageEntry(entry) {
+        const details = String(entry && entry.details ? entry.details : "").toLowerCase();
+        return details.includes("damaged");
+      }
+
+      function renderDamageHistoryRows(entries) {
+        damageHistoryBody.innerHTML = "";
+        if (!Array.isArray(entries) || entries.length === 0) {
+          damageHistoryEmpty.style.display = "block";
+          damageHistoryEmpty.textContent = "No damage history entries found for this unit.";
+          return;
+        }
+
+        damageHistoryEmpty.style.display = "none";
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDateTime(entry.createdAt))}</td>
+            <td>${escapeHtml(formatHistoryAction(entry.action))}</td>
+            <td>${escapeHtml(entry.details ?? "-")}</td>
+            <td>${escapeHtml(entry.techName ?? "-")}</td>
+          `;
+          damageHistoryBody.appendChild(tr);
+        }
+      }
+
       function renderServiceHistoryRows(entries) {
         serviceHistoryBody.innerHTML = "";
         if (!Array.isArray(entries) || entries.length === 0) {
@@ -781,8 +839,10 @@
         }
         if (id === "history-modal-backdrop") {
           historyModalTitle.textContent = "History";
+          damageHistoryBody.innerHTML = "";
           historyBody.innerHTML = "";
           serviceHistoryBody.innerHTML = "";
+          damageHistoryEmpty.style.display = "none";
           historyEmpty.style.display = "none";
           serviceHistoryEmpty.style.display = "none";
           setMsg(historyError, "");
@@ -844,8 +904,11 @@
       async function openRepairHistoryModal(row) {
         const unitLabel = row.unitNumber ? `Unit ${row.unitNumber}` : "Unit";
         historyModalTitle.textContent = `${unitLabel} — History`;
+        damageHistoryBody.innerHTML = "";
         historyBody.innerHTML = "";
         serviceHistoryBody.innerHTML = "";
+        damageHistoryEmpty.style.display = "block";
+        damageHistoryEmpty.textContent = "Loading damage history...";
         historyEmpty.style.display = "block";
         historyEmpty.textContent = "Loading repair history...";
         serviceHistoryEmpty.style.display = "block";
@@ -863,16 +926,45 @@
           const serviceEntries = Array.isArray(servicePayload && servicePayload.entries)
             ? servicePayload.entries
             : [];
+          const damageEntries = repairEntries.filter((entry) => isDamageEntry(entry));
+          renderDamageHistoryRows(damageEntries);
           renderRepairHistoryRows(repairEntries);
           renderServiceHistoryRows(serviceEntries);
         } catch (e) {
+          damageHistoryBody.innerHTML = "";
           historyBody.innerHTML = "";
           serviceHistoryBody.innerHTML = "";
+          damageHistoryEmpty.style.display = "block";
+          damageHistoryEmpty.textContent = "Unable to load history.";
           historyEmpty.style.display = "block";
           historyEmpty.textContent = "Unable to load history.";
-          serviceHistoryEmpty.style.display = "none";
+          serviceHistoryEmpty.style.display = "block";
+          serviceHistoryEmpty.textContent = "Unable to load history.";
           setMsg(historyError, String(e.message || e));
         }
+      }
+
+      function findInventoryRowByUnitNumber(unitNumberInput) {
+        const needle = String(unitNumberInput || "").trim().toLowerCase();
+        if (!needle) return null;
+        return allInventoryRows.find(
+          (row) => String(row && row.unitNumber ? row.unitNumber : "").trim().toLowerCase() === needle,
+        ) || null;
+      }
+
+      async function viewUnitHistoryFromCard() {
+        const unitNumber = unitHistoryUnit.value.trim();
+        setMsg(unitHistoryError, "");
+        if (!unitNumber) {
+          setMsg(unitHistoryError, "Unit # is required.");
+          return;
+        }
+        const row = findInventoryRowByUnitNumber(unitNumber);
+        if (!row) {
+          setMsg(unitHistoryError, `Unit ${unitNumber} was not found.`);
+          return;
+        }
+        await openRepairHistoryModal(row);
       }
 
       function renderInspectForm() {
@@ -1020,9 +1112,10 @@
           api("/api/inventory"),
           api("/api/reservations"),
         ]);
+        allInventoryRows = Array.isArray(rows) ? rows : [];
         lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
-        returnedRows = (rows || []).filter((row) => isReturnedStatus(row.status));
-        downRows = (rows || []).filter((row) => isDownStatus(row.status));
+        returnedRows = allInventoryRows.filter((row) => isReturnedStatus(row.status));
+        downRows = allInventoryRows.filter((row) => isDownStatus(row.status));
         setQueueCounts();
         renderReturnedRows();
         renderDownRows();
@@ -1255,6 +1348,18 @@
         );
       });
       manualDownCancel.addEventListener("click", resetManualDownForm);
+      unitHistoryView.addEventListener("click", () => {
+        viewUnitHistoryFromCard().catch((e) =>
+          setMsg(unitHistoryError, "Failed to load unit history: " + String(e.message || e)),
+        );
+      });
+      unitHistoryUnit.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        viewUnitHistoryFromCard().catch((e) =>
+          setMsg(unitHistoryError, "Failed to load unit history: " + String(e.message || e)),
+        );
+      });
       techLogout.addEventListener("click", async () => {
         try {
           await api("/api/tech-auth/logout", { method: "POST" });
