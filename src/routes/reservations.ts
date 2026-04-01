@@ -19,8 +19,8 @@ import {
   swapOnRentUnit,
   swapReservationUnit,
 } from "../lib/reservationsState.js";
-import { formatDisplayDateTimeInstant } from "../lib/displayDateTime.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
+import type { Prisma } from "@prisma/client";
 
 export const apiReservationsRouter = Router();
 
@@ -40,40 +40,172 @@ function parseLocalDateTime(dateText: string, timeText: string) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-async function buildShortageMessage(input: {
-  type: string;
-  quantity: number;
-  assignedCount: number;
-  shortBy: number;
-}) {
-  const snapshot = await getReservationsSnapshot();
-  const targetType = upperText(input.type);
+function isWithinAutoAssignWindow(startDate: string, startTime: string) {
+  const start = parseLocalDateTime(startDate, startTime);
+  if (!start) return false;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  return start.getTime() < cutoff.getTime();
+}
 
-  const matchingReturnTimes: Date[] = [];
+function parseAssignedUnitsFromJson(
+  raw: Prisma.JsonValue,
+): Array<{ unitId: string; unitNumber: string; type: string }> {
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ unitId: string; unitNumber: string; type: string }> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const obj = item as Record<string, unknown>;
+    const unitId = String(obj.unitId ?? "").trim();
+    if (!unitId) continue;
+    out.push({
+      unitId,
+      unitNumber: String(obj.unitNumber ?? "").trim(),
+      type: String(obj.type ?? "").trim(),
+    });
+  }
+  return out;
+}
+
+async function autoAssignUpcomingReservations() {
+  const [reservationRows, inventoryRows, lastRentedByUnit] = await Promise.all([
+    prisma.reservationEntry.findMany({
+      where: { listKind: "RESERVATION" },
+      orderBy: [{ startDate: "asc" }, { startTime: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.inventory.findMany({
+      include: { asset: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    getLastRentedByUnit(),
+  ]);
+
+  const availableRows = inventoryRows.filter(
+    (row) => normalizeStatus(row.status) === STATUS_AVAILABLE,
+  );
+  const availableById = new Map(availableRows.map((u) => [u.id, u]));
+  const consumedUnitIds = new Set<string>();
+  const updates: Array<{ id: string; assignedUnits: Array<{ unitId: string; unitNumber: string; type: string }> }> = [];
+  const initialAssignedUnitIds = new Set<string>();
+  const finalAssignedUnitIds = new Set<string>();
+
+  for (const row of reservationRows) {
+    const existingAssigned = parseAssignedUnitsFromJson(row.assignedUnits);
+    existingAssigned.forEach((u) => initialAssignedUnitIds.add(u.unitId));
+
+    if (!isWithinAutoAssignWindow(row.startDate, row.startTime)) {
+      if (existingAssigned.length > 0) {
+        updates.push({ id: row.id, assignedUnits: [] });
+      }
+      continue;
+    }
+
+    const targetType = upperText(row.rentalType);
+    const keptAssigned = existingAssigned.filter((u) => {
+      if (consumedUnitIds.has(u.unitId)) return false;
+      if (upperText(u.type) !== targetType) return false;
+      consumedUnitIds.add(u.unitId);
+      return true;
+    });
+
+    const matchingAuto = availableRows
+      .filter((u) => !consumedUnitIds.has(u.id))
+      .filter((u) => upperText(u.asset.type) === targetType)
+      .sort((a, b) => {
+        const aLast = lastRentedByUnit[a.id];
+        const bLast = lastRentedByUnit[b.id];
+        if (!aLast && !bLast) return a.createdAt.getTime() - b.createdAt.getTime();
+        if (!aLast) return -1;
+        if (!bLast) return 1;
+        return new Date(aLast).getTime() - new Date(bLast).getTime();
+      });
+
+    const need = Math.max(0, row.quantity - keptAssigned.length);
+    const added = matchingAuto.slice(0, need).map((u) => ({
+      unitId: u.id,
+      unitNumber: u.unitNumber,
+      type: u.asset.type,
+    }));
+    added.forEach((u) => consumedUnitIds.add(u.unitId));
+
+    const nextAssigned = [...keptAssigned, ...added];
+    nextAssigned.forEach((u) => finalAssignedUnitIds.add(u.unitId));
+
+    const sameLength = nextAssigned.length === existingAssigned.length;
+    const sameMembers =
+      sameLength &&
+      nextAssigned.every((u, idx) => {
+        const curr = existingAssigned[idx];
+        return (
+          curr &&
+          curr.unitId === u.unitId &&
+          curr.unitNumber === u.unitNumber &&
+          curr.type === u.type
+        );
+      });
+    if (!sameMembers) {
+      updates.push({ id: row.id, assignedUnits: nextAssigned });
+    }
+  }
+
+  const releaseIds = Array.from(initialAssignedUnitIds).filter(
+    (id) => !finalAssignedUnitIds.has(id),
+  );
+  const reserveIds = Array.from(finalAssignedUnitIds).filter((id) => availableById.has(id));
+
+  await prisma.$transaction(async (tx) => {
+    for (const update of updates) {
+      await tx.reservationEntry.update({
+        where: { id: update.id },
+        data: { assignedUnits: update.assignedUnits as unknown as Prisma.InputJsonValue },
+      });
+    }
+    if (releaseIds.length > 0) {
+      await tx.inventory.updateMany({
+        where: { id: { in: releaseIds }, status: STATUS_RESERVED },
+        data: { status: STATUS_AVAILABLE, inspectionRequired: false },
+      });
+    }
+    if (reserveIds.length > 0) {
+      await tx.inventory.updateMany({
+        where: { id: { in: reserveIds }, status: STATUS_AVAILABLE },
+        data: { status: STATUS_RESERVED, inspectionRequired: false },
+      });
+    }
+  });
+}
+
+function addReservationFulfillmentMeta(snapshot: Awaited<ReturnType<typeof getReservationsSnapshot>>) {
+  const onRentReturnTimesByType = new Map<string, Date[]>();
   for (const order of snapshot.onRent) {
-    const hasMatchingUnit = (order.assignedUnits || []).some(
-      (u) => upperText(u.type) === targetType,
-    );
-    if (!hasMatchingUnit) continue;
     const dt = parseLocalDateTime(order.endDate, order.endTime);
-    if (dt) matchingReturnTimes.push(dt);
+    if (!dt) continue;
+    for (const unit of order.assignedUnits || []) {
+      const key = upperText(unit.type);
+      if (!onRentReturnTimesByType.has(key)) onRentReturnTimesByType.set(key, []);
+      onRentReturnTimesByType.get(key)!.push(dt);
+    }
   }
-  matchingReturnTimes.sort((a, b) => a.getTime() - b.getTime());
-
-  const base = `Not enough ${STATUS_AVAILABLE} units for type "${input.type}". Requested ${input.quantity}, currently assignable ${input.assignedCount}. Short by ${input.shortBy} unit(s).`;
-
-  if (matchingReturnTimes.length === 0) {
-    return `${base} No matching On Rent return time is currently scheduled.`;
-  }
-
-  if (matchingReturnTimes.length >= input.shortBy) {
-    const fulfillment = matchingReturnTimes[input.shortBy - 1]!;
-    return `${base} Expected fulfillment by ${formatDisplayDateTimeInstant(fulfillment)} based on current On Rent end times.`;
+  for (const arr of onRentReturnTimesByType.values()) {
+    arr.sort((a, b) => a.getTime() - b.getTime());
   }
 
-  const earliest = matchingReturnTimes[0]!;
-  const stillShort = input.shortBy - matchingReturnTimes.length;
-  return `${base} Only ${matchingReturnTimes.length} matching return(s) are currently scheduled (earliest ${formatDisplayDateTimeInstant(earliest)}); still short by ${stillShort} after those returns.`;
+  return {
+    ...snapshot,
+    reservations: snapshot.reservations.map((entry) => {
+      const shortageCount = Math.max(0, entry.quantity - (entry.assignedUnits?.length || 0));
+      if (shortageCount === 0) {
+        return { ...entry, shortageCount: 0, expectedFulfillmentDateTime: null };
+      }
+      const matching = onRentReturnTimesByType.get(upperText(entry.type)) || [];
+      const expected = matching.length >= shortageCount ? matching[shortageCount - 1] : null;
+      return {
+        ...entry,
+        shortageCount,
+        expectedFulfillmentDateTime: expected ? expected.toISOString() : null,
+      };
+    }),
+  };
 }
 
 type ReservationLineItem = {
@@ -107,7 +239,9 @@ function parseLineItems(body: Record<string, unknown>): ReservationLineItem[] {
 }
 
 apiReservationsRouter.get("/", async (_req, res) => {
-  res.json(await getReservationsSnapshot());
+  await autoAssignUpcomingReservations();
+  const snapshot = await getReservationsSnapshot();
+  res.json(addReservationFulfillmentMeta(snapshot));
 });
 
 apiReservationsRouter.post("/", async (req, res) => {
@@ -165,49 +299,10 @@ apiReservationsRouter.post("/", async (req, res) => {
     return;
   }
 
-  const lastRentedByUnit = await getLastRentedByUnit();
-  const consumedUnitIds = new Set<string>();
   const perLineAssigned = new Map<number, typeof manualUnits>();
-
   for (let idx = 0; idx < lineItems.length; idx++) {
-    const line = lineItems[idx]!;
-    const targetType = upperText(line.type);
-    const matchingAuto = available
-      .filter((u) => !consumedUnitIds.has(u.id))
-      .filter((u) => upperText(u.asset.type) === targetType)
-      .sort((a, b) => {
-        const aLast = lastRentedByUnit[a.id];
-        const bLast = lastRentedByUnit[b.id];
-        if (!aLast && !bLast) {
-          return a.createdAt.getTime() - b.createdAt.getTime();
-        }
-        if (!aLast) return -1;
-        if (!bLast) return 1;
-        return new Date(aLast).getTime() - new Date(bLast).getTime();
-      });
-
-    const assigned = matchingAuto.slice(0, line.quantity);
-    if (assigned.length < line.quantity) {
-      const shortBy = line.quantity - assigned.length;
-      res.status(400).json({
-        error: await buildShortageMessage({
-          type: line.type,
-          quantity: line.quantity,
-          assignedCount: assigned.length,
-          shortBy,
-        }),
-      });
-      return;
-    }
-    assigned.forEach((u) => consumedUnitIds.add(u.id));
-    perLineAssigned.set(idx, assigned);
+    perLineAssigned.set(idx, []);
   }
-
-  const assignedIds = Array.from(consumedUnitIds);
-  await prisma.inventory.updateMany({
-    where: { id: { in: assignedIds } },
-    data: { status: STATUS_RESERVED, inspectionRequired: false },
-  });
 
   const groupKey = reservationGroupKey({
     customerName,
@@ -240,10 +335,19 @@ apiReservationsRouter.post("/", async (req, res) => {
     createdReservations.push(reservation);
   }
 
+  await autoAssignUpcomingReservations();
+  const snapshot = await getReservationsSnapshot();
+  const createdIds = new Set(createdReservations.map((r) => r.id));
+  const refreshedCreated = snapshot.reservations.filter((r) => createdIds.has(r.id));
+  const shortages = refreshedCreated
+    .map((r) => Math.max(0, r.quantity - (r.assignedUnits?.length || 0)))
+    .reduce((sum, v) => sum + v, 0);
+
   res.status(201).json({
     created: createdReservations.length,
-    reservations: createdReservations,
+    reservations: refreshedCreated,
     orderNumber: createdReservations[0]?.orderNumber ?? "",
+    shortageCount: shortages,
   });
 });
 

@@ -41,6 +41,7 @@
       .row { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
       .btn { display:inline-flex; align-items:center; text-decoration:none; background:var(--accent); color:#fff; border-radius:8px; padding:10px 14px; font-weight:600; font-size:14px; }
       .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .warn-text { color:#f2c572; }
       .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
       .section-head h2 { margin:0; font-size:15px; }
       .filter-select { width:auto; min-width:170px; padding:8px 10px; font-size:13px; }
@@ -151,6 +152,7 @@
                 <th>Address</th>
                 <th>Unit Number(s)</th>
                 <th>Type(s)</th>
+                <th>Fulfillment</th>
                 <th>Start Date/Time</th>
               </tr>
             </thead>
@@ -254,6 +256,16 @@
         return Array.from(new Set(entry.assignedUnits.map((u) => u.type))).join(", ");
       }
 
+      function fulfillmentText(entry) {
+        const shortage = Number(entry && entry.shortageCount) || 0;
+        if (shortage <= 0) return { text: "Ready", warn: false };
+        const iso = String(entry && entry.expectedFulfillmentDateTime ? entry.expectedFulfillmentDateTime : "").trim();
+        if (!iso) return { text: `Short ${shortage} (ETA unavailable)`, warn: true };
+        const dt = new Date(iso);
+        const eta = Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString();
+        return { text: `Short ${shortage} (ETA ${eta})`, warn: true };
+      }
+
       function scheduleTimestamp(dateText, timeText) {
         if (!dateText || !timeText) return Number.MAX_SAFE_INTEGER;
         const dt = new Date(`${dateText}T${timeText}:00`);
@@ -317,11 +329,13 @@
         for (const e of filteredEntries) {
           const tr = document.createElement("tr");
           const scheduledAt = formatDateTime(e[options.dateField], e[options.timeField]);
+          const fulfillment = fulfillmentText(e);
           tr.innerHTML = `
             <td>${e.customerName}</td>
             <td>${e.address}</td>
             <td>${assignedUnitNumbers(e)}</td>
             <td>${assignedTypes(e)}</td>
+            <td class="${fulfillment.warn ? "warn-text" : ""}">${fulfillment.text}</td>
             <td>${scheduledAt}</td>
           `;
           body.appendChild(tr);

@@ -44,6 +44,7 @@
       tbody tr:last-child td { border-bottom:0; }
       .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
       .empty { color:var(--muted); font-size:13px; }
+      .warn-text { color:#f2c572; }
       .actions { display:flex; flex-wrap:wrap; gap:6px; }
       .small { padding:6px 10px; font-size:12px; border-radius:7px; }
       .modal-backdrop { position:fixed; inset:0; background:rgba(6,9,13,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
@@ -175,6 +176,7 @@
               <th>Type</th>
               <th>Quantity</th>
               <th>Assigned Units</th>
+              <th>Fulfillment</th>
               <th style="width:220px;">Options</th>
             </tr>
           </thead>
@@ -472,6 +474,20 @@
         return entry.assignedUnits.map((u) => `${u.unitNumber} (${u.type})`).join(", ");
       }
 
+      function formatFulfillmentStatus(entry) {
+        const shortage = Number(entry && entry.shortageCount) || 0;
+        if (shortage <= 0) {
+          return { html: "Ready", warn: false };
+        }
+        const iso = String(entry && entry.expectedFulfillmentDateTime ? entry.expectedFulfillmentDateTime : "").trim();
+        if (!iso) {
+          return { html: `Short ${shortage} (ETA unavailable)`, warn: true };
+        }
+        const dt = new Date(iso);
+        const eta = Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString();
+        return { html: `Short ${shortage} (ETA ${escapeHtml(eta)})`, warn: true };
+      }
+
       function assignedUnitNumbers(entry) {
         if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
         return entry.assignedUnits.map((u) => u.unitNumber).join(", ");
@@ -523,6 +539,7 @@
         empty.style.display = "none";
 
         for (const r of reservations) {
+          const fulfillment = formatFulfillmentStatus(r);
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><input type="checkbox" class="js-res-select" data-id="${r.id}" data-group="${escapeHtml(batchGroupKey(r))}" /></td>
@@ -536,6 +553,7 @@
             <td>${r.type}</td>
             <td>${r.quantity}</td>
             <td>${assignedUnitsText(r)}</td>
+            <td class="${fulfillment.warn ? "warn-text" : ""}">${fulfillment.html}</td>
             <td>
               <div class="actions">
                 <button class="btn secondary small js-swap" data-id="${r.id}" type="button">Swap Unit</button>
@@ -628,7 +646,15 @@
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setMsg(`${created.created || 0} reservation entr${created.created === 1 ? "y" : "ies"} created and units reserved.`, true);
+          const shortage = Number(created && created.shortageCount) || 0;
+          const shortageText =
+            shortage > 0
+              ? ` ${shortage} unit${shortage === 1 ? "" : "s"} still short; ETA shown in Upcoming Orders.`
+              : "";
+          setMsg(
+            `${created.created || 0} reservation entr${created.created === 1 ? "y" : "ies"} created.${shortageText}`,
+            true,
+          );
           reservationLines = [];
           renderReservationLines();
           await loadData();
