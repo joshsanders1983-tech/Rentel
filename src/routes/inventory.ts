@@ -3,12 +3,17 @@ import { requireAdmin } from "../lib/adminAuth.js";
 import {
   completeOpenMaintenanceTasksForInventory,
   evaluateMaintenanceRulesForUnits,
+  isServiceDueReason,
 } from "../lib/maintenanceAutomation.js";
 import { prisma } from "../lib/prisma.js";
 import {
   appendRepairHistoryEntry,
   getRepairHistoryEntries,
 } from "../lib/repairHistory.js";
+import {
+  appendServiceHistoryEntry,
+  getServiceHistoryEntries,
+} from "../lib/serviceHistory.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
 import { getTechSession, requireTech } from "../lib/techAuth.js";
 
@@ -463,6 +468,18 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
     createdAt: completedAt,
   });
 
+  if (isServiceDueReason(existing.downReason)) {
+    await appendServiceHistoryEntry({
+      inventoryId: updated.id,
+      details: existing.downReason
+        ? `Completed service: ${existing.downReason}`
+        : "Completed scheduled service.",
+      techName: actorName || null,
+      repairHours,
+      createdAt: completedAt,
+    });
+  }
+
   await completeOpenMaintenanceTasksForInventory(updated.id, completedAt.toISOString());
   await evaluateMaintenanceRulesForUnits([updated.id]);
   const hydrated = await prisma.inventory.findUnique({
@@ -494,6 +511,31 @@ apiInventoryRouter.get("/:id/repair-history", requireTech, async (req, res) => {
   }
 
   const entries = await getRepairHistoryEntries(id, 200);
+  res.json({
+    inventoryId: inventory.id,
+    unitNumber: inventory.unitNumber,
+    assetType: inventory.asset?.type ?? null,
+    entries,
+  });
+});
+
+apiInventoryRouter.get("/:id/service-history", requireTech, async (req, res) => {
+  const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  if (!id) {
+    res.status(400).json({ error: "Invalid inventory id." });
+    return;
+  }
+
+  const inventory = await prisma.inventory.findUnique({
+    where: { id },
+    include: { asset: true },
+  });
+  if (!inventory) {
+    res.status(404).json({ error: "Inventory unit not found." });
+    return;
+  }
+
+  const entries = await getServiceHistoryEntries(id, 200);
   res.json({
     inventoryId: inventory.id,
     unitNumber: inventory.unitNumber,

@@ -244,7 +244,8 @@
 
     <div class="modal-backdrop" id="history-modal-backdrop" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title" style="max-width:780px;">
-        <h3 id="history-modal-title">Repair History</h3>
+        <h3 id="history-modal-title">History</h3>
+        <h4 class="history-subheading" style="margin:0.75rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Repair history</h4>
         <div id="history-empty" class="empty" style="display:none;"></div>
         <table>
           <thead>
@@ -257,6 +258,19 @@
             </tr>
           </thead>
           <tbody id="history-body"></tbody>
+        </table>
+        <h4 class="history-subheading" style="margin:1rem 0 0.35rem;font-size:0.95rem;font-weight:600;">Service history</h4>
+        <div id="service-history-empty" class="empty" style="display:none;"></div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:200px;">Date</th>
+              <th style="width:120px;">Hours</th>
+              <th>Details</th>
+              <th style="width:140px;">Tech</th>
+            </tr>
+          </thead>
+          <tbody id="service-history-body"></tbody>
         </table>
         <div class="modal-actions">
           <button class="btn secondary" id="close-history-modal" type="button">Close</button>
@@ -285,10 +299,13 @@
       const completeCurrentHours = $("complete-current-hours");
       const completeHourMeter = $("complete-hour-meter");
       const completeSubmit = $("complete-submit");
+      const completeModalTitle = $("complete-modal-title");
       const completeError = $("complete-error");
       const historyModalTitle = $("history-modal-title");
       const historyBody = $("history-body");
       const historyEmpty = $("history-empty");
+      const serviceHistoryBody = $("service-history-body");
+      const serviceHistoryEmpty = $("service-history-empty");
       const historyError = $("history-error");
       const needsAttentionSection = $("needs-attention-section");
       const needsAttentionDescription = $("needs-attention-description");
@@ -321,6 +338,14 @@
         { key: "damaged", label: "Damaged" },
         { key: "na", label: "N/A" },
       ];
+
+      const SERVICE_DUE_PREFIX = "Service Due:";
+
+      function isServiceDueDown(row) {
+        return String(row && row.downReason ? row.downReason : "")
+          .trim()
+          .startsWith(SERVICE_DUE_PREFIX);
+      }
 
       function setMsg(el, msg) {
         el.style.display = msg ? "block" : "none";
@@ -440,6 +465,27 @@
         }
       }
 
+      function renderServiceHistoryRows(entries) {
+        serviceHistoryBody.innerHTML = "";
+        if (!Array.isArray(entries) || entries.length === 0) {
+          serviceHistoryEmpty.style.display = "block";
+          serviceHistoryEmpty.textContent = "No service history entries yet for this cart.";
+          return;
+        }
+
+        serviceHistoryEmpty.style.display = "none";
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDateTime(entry.createdAt))}</td>
+            <td>${escapeHtml(formatHours(entry.repairHours))}</td>
+            <td>${escapeHtml(entry.details ?? "-")}</td>
+            <td>${escapeHtml(entry.techName ?? "-")}</td>
+          `;
+          serviceHistoryBody.appendChild(tr);
+        }
+      }
+
       function setQueueCounts() {
         returnedCount.textContent = `${returnedRows.length} unit${returnedRows.length === 1 ? "" : "s"}`;
         downCount.textContent = `${downRows.length} unit${downRows.length === 1 ? "" : "s"}`;
@@ -534,12 +580,15 @@
           completeHourMeter.value = "";
           completeSubmit.disabled = false;
           completeSubmit.textContent = "Complete";
+          completeModalTitle.textContent = "Complete Repair";
           setMsg(completeError, "");
         }
         if (id === "history-modal-backdrop") {
-          historyModalTitle.textContent = "Repair History";
+          historyModalTitle.textContent = "History";
           historyBody.innerHTML = "";
+          serviceHistoryBody.innerHTML = "";
           historyEmpty.style.display = "none";
+          serviceHistoryEmpty.style.display = "none";
           setMsg(historyError, "");
         }
       }
@@ -581,13 +630,15 @@
 
       function openCompleteModal(row) {
         activeCompleteUnit = row;
+        const serviceDue = isServiceDueDown(row);
+        completeModalTitle.textContent = serviceDue ? "Complete Service" : "Complete Repair";
         completeUnitNumber.textContent = row && row.unitNumber ? row.unitNumber : "-";
         completeCurrentHours.textContent = formatHours(row && row.hours);
         completeHourMeter.value = Number.isFinite(Number(row && row.hours))
           ? String(Number(row.hours))
           : "";
         completeSubmit.disabled = false;
-        completeSubmit.textContent = "Complete";
+        completeSubmit.textContent = serviceDue ? "Complete Service" : "Complete";
         setMsg(completeError, "");
         openModal("complete-modal-backdrop");
         completeHourMeter.focus();
@@ -595,21 +646,35 @@
       }
 
       async function openRepairHistoryModal(row) {
-        const unitLabel = row.unitNumber ? `Unit ${row.unitNumber}` : "Repair History";
-        historyModalTitle.textContent = `${unitLabel} Repair History`;
+        const unitLabel = row.unitNumber ? `Unit ${row.unitNumber}` : "Unit";
+        historyModalTitle.textContent = `${unitLabel} — History`;
         historyBody.innerHTML = "";
+        serviceHistoryBody.innerHTML = "";
         historyEmpty.style.display = "block";
         historyEmpty.textContent = "Loading repair history...";
+        serviceHistoryEmpty.style.display = "block";
+        serviceHistoryEmpty.textContent = "Loading service history...";
         setMsg(historyError, "");
         openModal("history-modal-backdrop");
         try {
-          const payload = await api(`/api/inventory/${encodeURIComponent(row.id)}/repair-history`);
-          const entries = Array.isArray(payload && payload.entries) ? payload.entries : [];
-          renderRepairHistoryRows(entries);
+          const [repairPayload, servicePayload] = await Promise.all([
+            api(`/api/inventory/${encodeURIComponent(row.id)}/repair-history`),
+            api(`/api/inventory/${encodeURIComponent(row.id)}/service-history`),
+          ]);
+          const repairEntries = Array.isArray(repairPayload && repairPayload.entries)
+            ? repairPayload.entries
+            : [];
+          const serviceEntries = Array.isArray(servicePayload && servicePayload.entries)
+            ? servicePayload.entries
+            : [];
+          renderRepairHistoryRows(repairEntries);
+          renderServiceHistoryRows(serviceEntries);
         } catch (e) {
           historyBody.innerHTML = "";
+          serviceHistoryBody.innerHTML = "";
           historyEmpty.style.display = "block";
-          historyEmpty.textContent = "Unable to load repair history.";
+          historyEmpty.textContent = "Unable to load history.";
+          serviceHistoryEmpty.style.display = "none";
           setMsg(historyError, String(e.message || e));
         }
       }

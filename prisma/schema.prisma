@@ -43,6 +43,7 @@ model Inventory {
   inspectionSubmissions InspectionSubmission[]
   onRentHourSnapshots     OnRentHourSnapshot[]
   repairHistoryEntries    RepairHistoryEntry[]
+  serviceHistoryEntries   ServiceHistoryEntry[]
 
   @@index([assetId])
   @@unique([unitNumber])
@@ -54,6 +55,19 @@ model RepairHistoryEntry {
   inventoryId String
   inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
   action      String
+  details     String?
+  techName    String?
+  repairHours Float?
+  createdAt   DateTime  @default(now())
+
+  @@index([inventoryId, createdAt])
+}
+
+/// Completed scheduled service events (maintenance automation "Service Due:" downs).
+model ServiceHistoryEntry {
+  id          String    @id @default(cuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
   details     String?
   techName    String?
   repairHours Float?

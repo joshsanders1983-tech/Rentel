@@ -61,7 +61,7 @@ const STATUS_AVAILABLE = "Available";
 const STATUS_DOWN = "Down";
 const STATUS_ON_RENT = "On Rent";
 const STATUS_RESERVED = "Reserved";
-const SERVICE_REASON_PREFIX = "Service Due:";
+export const SERVICE_REASON_PREFIX = "Service Due:";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -77,7 +77,7 @@ function toIdList(values: string[]): string[] {
   );
 }
 
-function isServiceDueReason(value: unknown): boolean {
+export function isServiceDueReason(value: unknown): boolean {
   const reason = String(value ?? "").trim();
   return reason.startsWith(SERVICE_REASON_PREFIX);
 }
