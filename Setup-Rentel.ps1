@@ -82,7 +82,8 @@ if (-not (Test-Path $envFile)) {
 }
 
 $dbUrl = Get-EnvValue $envFile "DATABASE_URL"
-if (Test-NeedsDatabaseUrl $dbUrl) {
+$directUrl = Get-EnvValue $envFile "DIRECT_URL"
+if ((Test-NeedsDatabaseUrl $dbUrl) -or (Test-NeedsDatabaseUrl $directUrl)) {
   Write-Title "Step 1 — Create a Supabase project (free tier is fine)"
   Write-Host "  I cannot log in for you. Do this once in your browser:"
   Write-Host ""
@@ -95,25 +96,36 @@ if (Test-NeedsDatabaseUrl $dbUrl) {
     Start-Process "https://supabase.com/dashboard"
   }
 
-  Write-Title "Step 2 — Copy the database connection string"
-  Write-Host "  In Supabase: Project Settings (gear) -> Database."
-  Write-Host "  Under Connection string, choose the URI format."
-  Write-Host "  Replace [YOUR-PASSWORD] with your database password (set when you created the project;"
-  Write-Host "  or use Reset database password on the same page)."
+  Write-Title "Step 2 — Copy two pooler URLs (Supavisor — works on IPv4 and Render)"
+  Write-Host "  In Supabase open your project -> top bar **Connect** -> **Connection String**."
+  Write-Host "  You need both pooler strings (host: aws-0-<region>.pooler.supabase.com), NOT the direct db.* host only."
   Write-Host ""
-  Write-Host "  For Prisma, prefer the Direct connection (port 5432) if you see Session / Direct / Pooler."
-  Write-Host "  The URL should start with postgresql:// and usually ends with ?sslmode=require"
+  Write-Host "  A) Session pooler — port **5432** -> paste below (saved as DIRECT_URL for migrations)."
+  $session = Read-Host "Paste Session pooler URI"
+  $session = $session.Trim().Trim('"')
+  if ([string]::IsNullOrWhiteSpace($session)) {
+    Write-Host "No URL entered. Set DIRECT_URL in .env and run this script again." -ForegroundColor Red
+    exit 1
+  }
+  Set-EnvValue $envFile "DIRECT_URL" $session
+  Write-Host "Saved DIRECT_URL."
   Write-Host ""
-  $paste = Read-Host "Paste the full connection string here"
-  $paste = $paste.Trim().Trim('"')
-  if ([string]::IsNullOrWhiteSpace($paste)) {
+  Write-Host "  B) Transaction pooler — port **6543** -> paste below (saved as DATABASE_URL for the app)."
+  $tx = Read-Host "Paste Transaction pooler URI"
+  $tx = $tx.Trim().Trim('"')
+  if ([string]::IsNullOrWhiteSpace($tx)) {
     Write-Host "No URL entered. Set DATABASE_URL in .env and run this script again." -ForegroundColor Red
     exit 1
   }
-  Set-EnvValue $envFile "DATABASE_URL" $paste
+  if ($tx -match ":6543" -and $tx -notmatch "pgbouncer=true") {
+    $sep = "?"; if ($tx -match "\?") { $sep = "&" }
+    $tx = "$tx${sep}pgbouncer=true"
+    Write-Host "Appended pgbouncer=true for Prisma + transaction pool."
+  }
+  Set-EnvValue $envFile "DATABASE_URL" $tx
   Write-Host "Saved DATABASE_URL."
 } else {
-  Write-Host "DATABASE_URL in .env looks configured; skipping paste step."
+  Write-Host "DATABASE_URL and DIRECT_URL in .env look configured; skipping paste step."
 }
 
 $adminPw = Get-EnvValue $envFile "ADMIN_PASSWORD"
@@ -139,9 +151,9 @@ try {
   if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "If this failed:" -ForegroundColor Yellow
-    Write-Host "  - Confirm the password in DATABASE_URL matches Supabase (reset password in Project Settings -> Database)."
-    Write-Host "  - Try the Direct connection string (port 5432), not the pooler, for migrate deploy."
-    Write-Host "  - See: https://supabase.com/docs/guides/database/connecting-to-postgres"
+    Write-Host "  - Confirm passwords in DATABASE_URL and DIRECT_URL match Supabase (reset in Project Settings -> Database)."
+    Write-Host "  - Use Supavisor pooler URLs from Connect (see .env.example); direct db.*:5432 alone can fail on IPv4-only networks."
+    Write-Host "  - See: https://supabase.com/docs/guides/database/prisma"
     exit 1
   }
 
@@ -152,7 +164,7 @@ try {
   Write-Host "  Or:  npm run dev"
   Write-Host "  Then open http://localhost:4000"
   Write-Host ""
-  Write-Host "  Give every teammate the same DATABASE_URL in their .env so data stays in sync."
+  Write-Host "  Give every teammate the same DATABASE_URL and DIRECT_URL in their .env so data stays in sync."
   Write-Host ""
 } finally {
   Pop-Location

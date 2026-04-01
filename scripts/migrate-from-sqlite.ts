@@ -1,20 +1,12 @@
 /** One-time SQLite → Postgres copy. Usage: `npx tsx scripts/migrate-from-sqlite.ts [--force] [dev.db]` */
 
-import "./load-env-first.js";
+import "../src/loadEnv.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import type { Prisma, ReservationListKind } from "@prisma/client";
 import { ensureMaintenanceAutomationSchema } from "../src/lib/maintenanceAutomation.js";
 import { prisma } from "../src/lib/prisma.js";
-
-function assertPostgresUrl() {
-  const u = process.env.DATABASE_URL ?? "";
-  if (!u || u.startsWith("file:")) {
-    console.error("Set DATABASE_URL to your Supabase Postgres URI in .env");
-    process.exit(1);
-  }
-}
 
 function openSqlite(path: string): Database.Database {
   if (!existsSync(path)) {
@@ -103,7 +95,6 @@ async function clearPostgres(force: boolean) {
 }
 
 async function main() {
-  assertPostgresUrl();
 
   const argv = process.argv.slice(2).filter((a) => a !== "--force");
   const force = process.argv.includes("--force");
