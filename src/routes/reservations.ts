@@ -8,6 +8,8 @@ import {
   addReservation,
   activateReservation,
   cancelReservation,
+  convertPotentialToReservation,
+  deletePotential,
   endOnRentBatch,
   getLastRentedByUnit,
   getReservationsSnapshot,
@@ -513,5 +515,25 @@ apiReservationsRouter.post("/:id/potential", async (req, res) => {
   });
   await evaluateMaintenanceRulesForUnits(potential.assignedUnits.map((u) => u.unitId));
 
+  res.json({ ok: true });
+});
+
+apiReservationsRouter.post("/:id/convert-to-reservation", async (req, res) => {
+  const { id } = req.params;
+  const converted = await convertPotentialToReservation(id);
+  if (!converted) {
+    res.status(404).json({ error: "Potential entry not found." });
+    return;
+  }
+  res.json({ ok: true, reservation: converted });
+});
+
+apiReservationsRouter.delete("/:id/potential", async (req, res) => {
+  const { id } = req.params;
+  const deleted = await deletePotential(id);
+  if (!deleted) {
+    res.status(404).json({ error: "Potential entry not found." });
+    return;
+  }
   res.json({ ok: true });
 });

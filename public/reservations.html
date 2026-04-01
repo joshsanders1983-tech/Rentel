@@ -128,7 +128,7 @@
           </div>
         </div>
         <div class="row" style="margin-top:10px;">
-          <button class="btn secondary small" id="res-add-line" type="button">Add Type + Qty</button>
+          <button class="btn secondary small" id="res-add-line" type="button">Add to Reservation</button>
         </div>
         <div class="hint">Selected type lines for this reservation:</div>
         <table style="margin-top:8px;">
@@ -382,11 +382,14 @@
         const select = $("res-qty");
         if (!select) return;
         select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = "Select quantity...";
+        select.appendChild(ph);
         for (let i = 1; i <= 10; i += 1) {
           const opt = document.createElement("option");
           opt.value = String(i);
           opt.textContent = String(i);
-          if (i === 1) opt.selected = true;
           select.appendChild(opt);
         }
       }
@@ -747,7 +750,7 @@
         $("res-end-date").value = "";
         $("res-end-time").value = "";
         $("res-type").value = "";
-        $("res-qty").value = "1";
+        $("res-qty").value = "";
         reservationLines = [];
         renderReservationLines();
         setMsg("");
@@ -768,10 +771,12 @@
         const type = $("res-type").value;
         const quantity = Number($("res-qty").value || 0);
         if (!type || quantity < 1) {
-          setMsg("Select a Type and Quantity, then click Add Type + Qty.");
+          setMsg("Select a Type and Quantity, then click Add to Reservation.");
           return;
         }
         reservationLines.push({ type, quantity });
+        $("res-type").value = "";
+        $("res-qty").value = "";
         renderReservationLines();
         setMsg("");
       });

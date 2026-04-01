@@ -323,6 +323,31 @@ export async function moveReservationToPotential(id: string) {
   return clone(rowToReservationRecord(updated));
 }
 
+export async function deletePotential(id: string) {
+  const row = await prisma.reservationEntry.findFirst({
+    where: { id, listKind: "POTENTIAL" },
+  });
+  if (!row) return null;
+  await prisma.reservationEntry.delete({ where: { id } });
+  return clone(rowToReservationRecord(row));
+}
+
+export async function convertPotentialToReservation(id: string) {
+  const now = new Date();
+  const row = await prisma.reservationEntry.findFirst({
+    where: { id, listKind: "POTENTIAL" },
+  });
+  if (!row) return null;
+  const updated = await prisma.reservationEntry.update({
+    where: { id },
+    data: {
+      listKind: "RESERVATION",
+      listEnteredAt: now,
+    },
+  });
+  return clone(rowToReservationRecord(updated));
+}
+
 export async function swapReservationUnit(
   id: string,
   removeUnitId: string,

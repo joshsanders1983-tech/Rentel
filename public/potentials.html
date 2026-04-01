@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Potentials</title>
     <style>
-      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; --danger:#b24242; }
       * { box-sizing: border-box; }
       body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
       header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
@@ -21,6 +21,9 @@
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
       .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
       .btn { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      .btn.small { padding:6px 10px; font-size:12px; border-radius:7px; }
+      .btn.danger { background:var(--danger); }
+      .actions { display:flex; flex-wrap:wrap; gap:6px; }
       table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:10px; }
       thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
       tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
@@ -68,6 +71,7 @@
               <th>End</th>
               <th>Type</th>
               <th>Quantity</th>
+              <th style="width:240px;">Actions</th>
             </tr>
           </thead>
           <tbody id="potentials-body"></tbody>
@@ -86,8 +90,11 @@
         el.textContent = message || "";
       }
 
-      async function api(path) {
-        const res = await fetch(path, { headers: { "Content-Type": "application/json" } });
+      async function api(path, options = {}) {
+        const res = await fetch(path, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
         const text = await res.text();
         const data = text ? JSON.parse(text) : null;
         if (!res.ok) throw new Error((data && data.error) || "Request failed");
@@ -122,8 +129,36 @@
             <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.endDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.endTime))}</td>
             <td>${escapeHtml(entry.type)}</td>
             <td>${escapeHtml(entry.quantity)}</td>
+            <td>
+              <div class="actions">
+                <button class="btn small js-convert" data-id="${escapeHtml(entry.id)}" type="button">Convert to Reservation</button>
+                <button class="btn danger small js-delete" data-id="${escapeHtml(entry.id)}" type="button">Delete</button>
+              </div>
+            </td>
           `;
+          tr.querySelector(".js-convert").addEventListener("click", () => convertToReservation(entry.id));
+          tr.querySelector(".js-delete").addEventListener("click", () => deletePotential(entry.id));
           body.appendChild(tr);
+        }
+      }
+
+      async function convertToReservation(id) {
+        try {
+          setMsg("");
+          await api(`/api/reservations/${encodeURIComponent(id)}/convert-to-reservation`, { method: "POST" });
+          await loadPotentials();
+        } catch (err) {
+          setMsg("Failed to convert Potential: " + String(err.message || err));
+        }
+      }
+
+      async function deletePotential(id) {
+        try {
+          setMsg("");
+          await api(`/api/reservations/${encodeURIComponent(id)}/potential`, { method: "DELETE" });
+          await loadPotentials();
+        } catch (err) {
+          setMsg("Failed to delete Potential: " + String(err.message || err));
         }
       }
 
