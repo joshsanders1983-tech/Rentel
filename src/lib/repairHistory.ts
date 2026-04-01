@@ -30,7 +30,11 @@ function isDuplicateColumnError(error: unknown): boolean {
     error && typeof error === "object" && "message" in error
       ? String((error as { message?: unknown }).message ?? "")
       : "";
-  return message.toLowerCase().includes("duplicate column name");
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("duplicate column") ||
+    (lower.includes("already exists") && lower.includes("column"))
+  );
 }
 
 async function ensureRepairHistorySchema(): Promise<void> {
@@ -98,7 +102,7 @@ export async function appendRepairHistoryEntry(input: {
       "techName",
       "repairHours",
       "createdAt"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     `,
     randomUUID(),
     inventoryId,
@@ -130,9 +134,9 @@ export async function getRepairHistoryEntries(
       "repairHours",
       "createdAt"
     FROM "RepairHistoryEntry"
-    WHERE "inventoryId" = ?
+    WHERE "inventoryId" = $1
     ORDER BY "createdAt" DESC
-    LIMIT ?
+    LIMIT $2
     `,
     inventoryId,
     limit,

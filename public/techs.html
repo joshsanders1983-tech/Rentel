@@ -326,6 +326,7 @@
       </div>
     </div>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const maintenanceError = $("maintenance-error");
@@ -461,13 +462,11 @@
         if (!value) return "Never";
         const dt = new Date(value);
         if (Number.isNaN(dt.getTime())) return "Never";
-        return dt.toLocaleString();
+        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
       }
 
       function formatDateTime(value) {
-        const dt = new Date(value);
-        if (Number.isNaN(dt.getTime())) return "-";
-        return dt.toLocaleString();
+        return window.RentelDateTime.formatDisplayDateTimeInstant(value);
       }
 
       function formatHours(value) {

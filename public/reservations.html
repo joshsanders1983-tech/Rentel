@@ -195,6 +195,7 @@
       </div>
     </div>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const resMsg = $("res-msg");
@@ -311,9 +312,9 @@
       }
 
       function formatTimeLabel(hour24, minute) {
-        const suffix = hour24 >= 12 ? "PM" : "AM";
+        const ap = hour24 >= 12 ? "p" : "a";
         const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-        return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+        return `${hour12}:${String(minute).padStart(2, "0")}${ap}`;
       }
 
       function populateTimeSelect(selectId) {
@@ -428,10 +429,10 @@
             <td class="mono">${r.orderNumber}</td>
             <td>${r.customerName}</td>
             <td>${r.address}</td>
-            <td>${r.startDate}</td>
-            <td>${r.startTime}</td>
-            <td>${r.endDate}</td>
-            <td>${r.endTime}</td>
+            <td>${window.RentelDateTime.formatDisplayDateYmd(r.startDate)}</td>
+            <td>${window.RentelDateTime.formatDisplayTimeHm(r.startTime)}</td>
+            <td>${window.RentelDateTime.formatDisplayDateYmd(r.endDate)}</td>
+            <td>${window.RentelDateTime.formatDisplayTimeHm(r.endTime)}</td>
             <td>${r.type}</td>
             <td>${r.quantity}</td>
             <td>${assignedUnitsText(r)}</td>

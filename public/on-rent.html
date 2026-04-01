@@ -141,6 +141,7 @@
       </div>
     </div>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
 
@@ -284,12 +285,12 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><input type="checkbox" class="js-onrent-select" data-batch="${escapeHtml(batchKey)}" /></td>
-            <td>${entry.activatedAt ? new Date(entry.activatedAt).toLocaleString() : "-"}</td>
+            <td>${entry.activatedAt ? window.RentelDateTime.formatDisplayDateTimeInstant(entry.activatedAt) : "-"}</td>
             <td class="mono">${escapeHtml(entry.orderNumber)}</td>
             <td>${escapeHtml(entry.customerName)}</td>
             <td>${escapeHtml(entry.address)}</td>
-            <td>${escapeHtml(entry.startDate)} ${escapeHtml(entry.startTime)}</td>
-            <td>${escapeHtml(entry.endDate)} ${escapeHtml(entry.endTime)}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.startDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.startTime))}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.endDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.endTime))}</td>
             <td>${escapeHtml(unitType)}</td>
             <td>${escapeHtml(unitNumber)}</td>
             <td>

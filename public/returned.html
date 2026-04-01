@@ -112,6 +112,7 @@
       </div>
     </div>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const returnedBody = $("returned-body");
@@ -217,12 +218,12 @@
         for (const entry of entries) {
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${entry.returnedAt ? new Date(entry.returnedAt).toLocaleString() : "-"}</td>
+            <td>${entry.returnedAt ? window.RentelDateTime.formatDisplayDateTimeInstant(entry.returnedAt) : "-"}</td>
             <td class="mono">${escapeHtml(entry.orderNumber)}</td>
             <td>${escapeHtml(entry.customerName)}</td>
             <td>${escapeHtml(entry.address)}</td>
-            <td>${escapeHtml(entry.startDate)} ${escapeHtml(entry.startTime)}</td>
-            <td>${escapeHtml(entry.endDate)} ${escapeHtml(entry.endTime)}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.startDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.startTime))}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.endDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.endTime))}</td>
             <td>${escapeHtml(assignedTypes(entry))}</td>
             <td>${escapeHtml(assignedUnitNumbers(entry))}</td>
             <td>

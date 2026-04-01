@@ -146,6 +146,7 @@
       </div>
     </main>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       let latestReservationsSnapshot = { reservations: [], onRent: [] };
@@ -192,10 +193,7 @@
       }
 
       function formatDateTime(dateText, timeText) {
-        const datePart = String(dateText || "").trim();
-        const timePart = String(timeText || "").trim();
-        if (!datePart && !timePart) return "-";
-        return `${datePart} ${timePart}`.trim();
+        return window.RentelDateTime.formatDisplayDateTimeParts(dateText, timeText);
       }
 
       function parseScheduleDate(dateText, timeText) {

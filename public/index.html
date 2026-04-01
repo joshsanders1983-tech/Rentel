@@ -83,6 +83,7 @@
       </div>
     </main>
 
+    <script src="/app-datetime.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const inventoryBody = $("inventory-body");
@@ -115,7 +116,7 @@
         if (!value) return "Never";
         const dt = new Date(value);
         if (Number.isNaN(dt.getTime())) return "Never";
-        return dt.toLocaleString();
+        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
       }
 
       function formatHours(value) {

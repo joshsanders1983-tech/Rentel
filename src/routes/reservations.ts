@@ -17,6 +17,7 @@ import {
   swapOnRentUnit,
   swapReservationUnit,
 } from "../lib/reservationsState.js";
+import { formatDisplayDateTimeInstant } from "../lib/displayDateTime.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
 
 export const apiReservationsRouter = Router();
@@ -65,12 +66,12 @@ async function buildShortageMessage(input: {
 
   if (matchingReturnTimes.length >= input.shortBy) {
     const fulfillment = matchingReturnTimes[input.shortBy - 1]!;
-    return `${base} Expected fulfillment by ${fulfillment.toLocaleString()} based on current On Rent end times.`;
+    return `${base} Expected fulfillment by ${formatDisplayDateTimeInstant(fulfillment)} based on current On Rent end times.`;
   }
 
   const earliest = matchingReturnTimes[0]!;
   const stillShort = input.shortBy - matchingReturnTimes.length;
-  return `${base} Only ${matchingReturnTimes.length} matching return(s) are currently scheduled (earliest ${earliest.toLocaleString()}); still short by ${stillShort} after those returns.`;
+  return `${base} Only ${matchingReturnTimes.length} matching return(s) are currently scheduled (earliest ${formatDisplayDateTimeInstant(earliest)}); still short by ${stillShort} after those returns.`;
 }
 
 apiReservationsRouter.get("/", async (_req, res) => {
