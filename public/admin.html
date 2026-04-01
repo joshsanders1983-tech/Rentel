@@ -17,6 +17,29 @@
       main { max-width:1100px; margin:0 auto; padding:20px; }
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
       .card h2 { margin:0 0 12px; font-size:15px; }
+      #admin-app .card h2 {
+        margin: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      #admin-app .card h2::after {
+        content: "\25BC";
+        font-size: 12px;
+        color: var(--muted);
+        transition: transform 0.2s ease;
+      }
+      #admin-app .card.is-collapsed h2::after {
+        transform: rotate(-90deg);
+      }
+      #admin-app .card.is-collapsed > :not(h2) {
+        display: none;
+      }
+      #admin-app .card:not(.is-collapsed) > h2 {
+        margin-bottom: 12px;
+      }
       .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
       button { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
       button.secondary { background:#3a4a5e; }
@@ -1119,6 +1142,19 @@
       function showAdminApp() {
         adminAuthCard.style.display = "none";
         adminApp.style.display = "block";
+      }
+
+      function setupCollapsibleCards() {
+        const cards = Array.from(adminApp.querySelectorAll(":scope > .card"));
+        cards.forEach((card) => {
+          const heading = card.querySelector(":scope > h2");
+          if (!heading || card.dataset.collapsibleReady === "1") return;
+          card.classList.add("is-collapsed");
+          heading.addEventListener("click", () => {
+            card.classList.toggle("is-collapsed");
+          });
+          card.dataset.collapsibleReady = "1";
+        });
       }
 
       async function api(path, options = {}) {
@@ -2256,6 +2292,7 @@
       async function bootstrap() {
         showAuthCard();
         setMsg(adminAuthErr, "");
+        setupCollapsibleCards();
 
         try {
           const session = await api("/api/admin/session");
