@@ -200,9 +200,7 @@
               <span><span class="legend-dot delivery"></span>D: <strong id="legend-deliveries-count">0</strong></span>
               <span><span class="legend-dot pickup"></span>P: <strong id="legend-pickups-count">0</strong></span>
             </div>
-            <div id="map-provider-note" class="map-help"></div>
           </div>
-          <div class="map-help">Blue pins are deliveries (`D`). Orange pins are pickups (`P`). Nearby pins are clustered.</div>
         </div>
       </div>
     </main>
@@ -224,6 +222,7 @@
       let baseLayer = null;
       let currentProvider = "google";
       let googleReady = false;
+      let geocodeLastRequestAt = 0;
 
       function setMetric(id, value) {
         $(id).textContent = String(value);
@@ -400,12 +399,8 @@
             baseLayer = L.gridLayer.googleMutant({ type: "roadmap" });
             baseLayer.addTo(dashboardMap);
             currentProvider = "google";
-            $("map-provider-note").textContent = "Google Maps basemap enabled.";
             return;
           }
-          $("map-provider-note").textContent = "Google Maps key not found. Using OpenStreetMap. Set window.RENTEL_GOOGLE_MAPS_API_KEY or localStorage key `rentel-google-maps-key`.";
-        } else {
-          $("map-provider-note").textContent = "OpenStreetMap basemap enabled.";
         }
 
         baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -453,11 +448,20 @@
         }
 
         try {
+          const elapsed = Date.now() - geocodeLastRequestAt;
+          // Nominatim asks for low request rates; stay at roughly <=1 req/sec.
+          if (elapsed < 1100) {
+            await new Promise((resolve) => setTimeout(resolve, 1100 - elapsed));
+          }
           const qs = encodeURIComponent(normalized);
           const res = await fetch(
             `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${qs}&limit=1`,
           );
-          if (!res.ok) throw new Error("Geocode request failed");
+          geocodeLastRequestAt = Date.now();
+          if (!res.ok) {
+            if (res.status === 429 || res.status >= 500) return null;
+            throw new Error("Geocode request failed");
+          }
           const rows = await res.json();
           const first = Array.isArray(rows) ? rows[0] : null;
           const lat = Number(first && first.lat);
@@ -470,7 +474,6 @@
           if (point) window.localStorage.setItem(localCacheKey, JSON.stringify(point));
           return point;
         } catch {
-          geocodeCache.set(normalized, null);
           return null;
         }
       }
