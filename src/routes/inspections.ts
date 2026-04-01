@@ -770,6 +770,7 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
         inventoryId,
         formId: form.id,
         submittedAt,
+        ...(actorName ? { submittedByTechName: actorName } : {}),
         ...(hourMeterReading !== null ? { hourMeterReading } : {}),
         itemResults: {
           create: formItems.map((item) => {

@@ -606,6 +606,75 @@ apiInventoryRouter.get("/:id/service-history", requireTech, async (req, res) => 
   }
 });
 
+function inspectionItemSelectionLabel(item: {
+  selectedOk: boolean;
+  selectedNeedsAttention: boolean;
+  selectedDamaged: boolean;
+  selectedNa: boolean;
+}): string {
+  if (item.selectedOk) return "Ok";
+  if (item.selectedNeedsAttention) return "Needs attention";
+  if (item.selectedDamaged) return "Damaged";
+  if (item.selectedNa) return "N/A";
+  return "-";
+}
+
+apiInventoryRouter.get("/:id/inspection-history", requireTech, async (req, res) => {
+  try {
+    const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
+    if (!id) {
+      res.status(400).json({ error: "Invalid inventory id." });
+      return;
+    }
+
+    const inventory = await prisma.inventory.findUnique({
+      where: { id },
+      include: { asset: true },
+    });
+    if (!inventory) {
+      res.status(404).json({ error: "Inventory unit not found." });
+      return;
+    }
+
+    const submissions = await prisma.inspectionSubmission.findMany({
+      where: { inventoryId: id },
+      orderBy: { submittedAt: "desc" },
+      take: 200,
+      include: {
+        form: { select: { name: true } },
+        itemResults: {
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+
+    const entries = submissions.map((sub) => ({
+      id: sub.id,
+      submittedAt: sub.submittedAt.toISOString(),
+      formName: sub.form?.name ?? null,
+      hourMeterReading:
+        typeof sub.hourMeterReading === "number" && Number.isFinite(sub.hourMeterReading)
+          ? sub.hourMeterReading
+          : null,
+      submittedByTechName: sub.submittedByTechName ?? null,
+      items: sub.itemResults.map((row) => ({
+        label: row.labelSnapshot,
+        selection: inspectionItemSelectionLabel(row),
+      })),
+    }));
+
+    res.json({
+      inventoryId: inventory.id,
+      unitNumber: inventory.unitNumber,
+      assetType: inventory.asset?.type ?? null,
+      entries,
+    });
+  } catch (err) {
+    console.error("[inventory] GET /:id/inspection-history failed:", err);
+    res.status(500).json({ error: "Failed to load inspection history." });
+  }
+});
+
 apiInventoryRouter.delete("/:id", requireAdmin, async (req, res) => {
   const id = typeof req.params.id === "string" ? req.params.id : "";
   if (!id) {

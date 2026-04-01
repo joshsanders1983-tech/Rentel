@@ -110,8 +110,9 @@ model InspectionSubmission {
   inventory        Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
   formId           String?
   form             InspectionForm? @relation(fields: [formId], references: [id], onDelete: SetNull)
-  submittedAt      DateTime  @default(now())
-  hourMeterReading Float?
+  submittedAt          DateTime  @default(now())
+  hourMeterReading     Float?
+  submittedByTechName  String?
 
   itemResults InspectionSubmissionItem[]
 
