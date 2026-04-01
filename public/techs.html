@@ -1086,41 +1086,71 @@
         serviceHistoryEmpty.textContent = "Loading service history...";
         setMsg(historyError, "");
         openModal("history-modal-backdrop");
-        try {
-          const [inspectionPayload, repairPayload, servicePayload] = await Promise.all([
-            api(`/api/inventory/${encodeURIComponent(row.id)}/inspection-history`),
-            api(`/api/inventory/${encodeURIComponent(row.id)}/repair-history`),
-            api(`/api/inventory/${encodeURIComponent(row.id)}/service-history`),
-          ]);
-          const inspectionEntries = Array.isArray(inspectionPayload && inspectionPayload.entries)
-            ? inspectionPayload.entries
-            : [];
-          const repairEntries = Array.isArray(repairPayload && repairPayload.entries)
-            ? repairPayload.entries
-            : [];
-          const serviceEntries = Array.isArray(servicePayload && servicePayload.entries)
-            ? servicePayload.entries
-            : [];
+        const base = `/api/inventory/${encodeURIComponent(row.id)}`;
+        const results = await Promise.allSettled([
+          api(`${base}/inspection-history`),
+          api(`${base}/repair-history`),
+          api(`${base}/service-history`),
+        ]);
+
+        const loadErrors = [];
+        const inspectionPayload =
+          results[0].status === "fulfilled" ? results[0].value : null;
+        const repairPayload =
+          results[1].status === "fulfilled" ? results[1].value : null;
+        const servicePayload =
+          results[2].status === "fulfilled" ? results[2].value : null;
+
+        if (results[0].status === "rejected") {
+          loadErrors.push(`Inspection history: ${results[0].reason?.message || results[0].reason}`);
+        }
+        if (results[1].status === "rejected") {
+          loadErrors.push(`Repair history: ${results[1].reason?.message || results[1].reason}`);
+        }
+        if (results[2].status === "rejected") {
+          loadErrors.push(`Service history: ${results[2].reason?.message || results[2].reason}`);
+        }
+
+        const inspectionEntries = Array.isArray(inspectionPayload && inspectionPayload.entries)
+          ? inspectionPayload.entries
+          : [];
+        const repairEntries = Array.isArray(repairPayload && repairPayload.entries)
+          ? repairPayload.entries
+          : [];
+        const serviceEntries = Array.isArray(servicePayload && servicePayload.entries)
+          ? servicePayload.entries
+          : [];
+
+        if (results[0].status === "fulfilled") {
           renderInspectionHistoryRows(inspectionEntries);
+        } else {
+          inspectionHistoryBody.innerHTML = "";
+          inspectionHistoryEmpty.style.display = "block";
+          inspectionHistoryEmpty.textContent = "Unable to load inspection history.";
+        }
+
+        if (results[1].status === "fulfilled") {
           const damageEntries = repairEntries.filter((entry) => isDamageEntry(entry));
           renderDamageHistoryRows(damageEntries);
           renderRepairHistoryRows(repairEntries);
-          renderServiceHistoryRows(serviceEntries);
-        } catch (e) {
-          inspectionHistoryBody.innerHTML = "";
+        } else {
           damageHistoryBody.innerHTML = "";
           historyBody.innerHTML = "";
-          serviceHistoryBody.innerHTML = "";
-          inspectionHistoryEmpty.style.display = "block";
-          inspectionHistoryEmpty.textContent = "Unable to load history.";
           damageHistoryEmpty.style.display = "block";
-          damageHistoryEmpty.textContent = "Unable to load history.";
+          damageHistoryEmpty.textContent = "Unable to load damage history.";
           historyEmpty.style.display = "block";
-          historyEmpty.textContent = "Unable to load history.";
-          serviceHistoryEmpty.style.display = "block";
-          serviceHistoryEmpty.textContent = "Unable to load history.";
-          setMsg(historyError, String(e.message || e));
+          historyEmpty.textContent = "Unable to load repair history.";
         }
+
+        if (results[2].status === "fulfilled") {
+          renderServiceHistoryRows(serviceEntries);
+        } else {
+          serviceHistoryBody.innerHTML = "";
+          serviceHistoryEmpty.style.display = "block";
+          serviceHistoryEmpty.textContent = "Unable to load service history.";
+        }
+
+        setMsg(historyError, loadErrors.length ? loadErrors.join(" ") : "");
       }
 
       function findInventoryRowByUnitNumber(unitNumberInput) {

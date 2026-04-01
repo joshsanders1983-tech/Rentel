@@ -234,8 +234,13 @@ export async function appendRepairHistoryEntry(input: {
       createdAt,
     });
   } catch (err) {
-    if (!isMissingLaborHoursColumnError(err)) {
-      throw err;
+    if (isMissingLaborHoursColumnError(err)) {
+      console.warn("[repairHistory] laborHours INSERT not available; using legacy row.");
+    } else {
+      console.warn(
+        "[repairHistory] full INSERT failed; retrying without laborHours column:",
+        err instanceof Error ? err.message : err,
+      );
     }
     await insertRepairHistoryRowLegacy({
       id,
@@ -273,32 +278,34 @@ export async function getRepairHistoryEntries(
     ORDER BY "createdAt" DESC
     LIMIT $2
   `;
+  const legacyQuery = `
+    SELECT
+      "id",
+      "inventoryId",
+      "action",
+      "details",
+      "techName",
+      "repairHours",
+      "createdAt"
+    FROM "RepairHistoryEntry"
+    WHERE "inventoryId" = $1
+    ORDER BY "createdAt" DESC
+    LIMIT $2
+  `;
   try {
     return await queryRows<RepairHistoryRow>(fullQuery, inventoryId, limit);
   } catch (err) {
-    if (!isMissingLaborHoursColumnError(err)) {
-      throw err;
+    if (isMissingLaborHoursColumnError(err)) {
+      console.warn("[repairHistory] laborHours column missing; using legacy SELECT.");
+    } else {
+      console.warn(
+        "[repairHistory] full SELECT failed; retrying without laborHours:",
+        err instanceof Error ? err.message : err,
+      );
     }
     const rows = await queryRows<
       Omit<RepairHistoryRow, "laborHours"> & { laborHours?: null }
-    >(
-      `
-      SELECT
-        "id",
-        "inventoryId",
-        "action",
-        "details",
-        "techName",
-        "repairHours",
-        "createdAt"
-      FROM "RepairHistoryEntry"
-      WHERE "inventoryId" = $1
-      ORDER BY "createdAt" DESC
-      LIMIT $2
-      `,
-      inventoryId,
-      limit,
-    );
-    return rows.map((row) => ({ ...row, laborHours: null }));
+    >(legacyQuery, inventoryId, limit);
+    return rows.map((row) => ({ ...row, laborHours: null as number | null }));
   }
 }
