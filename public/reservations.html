@@ -75,7 +75,7 @@
         <img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'" />
         <div>
           <h1>Reservations</h1>
-          <div class="sub">Create reservations, auto-assign units fairly, activate to On Rent, or move entries to Potential.</div>
+          <div class="sub">Create reservations, auto-assign units fairly, activate to On Rent, or move entries to Potentials.</div>
         </div>
       </div>
       <nav class="top-nav" aria-label="Primary">
@@ -83,6 +83,7 @@
         <a class="nav-link active" href="/reservations">Reservations</a>
         <a class="nav-link" href="/on-rent">On Rent</a>
         <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link" href="/potentials">Potentials</a>
         <a class="nav-link" href="/inventory">Inventory</a>
         <a class="nav-link nav-link-admin" href="/admin">Admin</a>
         <a class="nav-link" href="/techs">Techs</a>
@@ -98,38 +99,53 @@
             <input id="res-customer" />
           </div>
           <div>
+            <label for="res-type">Type</label>
+            <select id="res-type"></select>
+          </div>
+          <div>
             <label for="res-address">Address</label>
             <input id="res-address" />
+          </div>
+          <div>
+            <label for="res-qty">Quantity</label>
+            <select id="res-qty"></select>
           </div>
           <div>
             <label for="res-start-date">Start Date</label>
             <input id="res-start-date" type="date" />
           </div>
           <div>
-            <label for="res-start-time">Start Time</label>
-            <select id="res-start-time"></select>
-          </div>
-          <div>
             <label for="res-end-date">End Date</label>
             <input id="res-end-date" type="date" />
+          </div>
+          <div>
+            <label for="res-start-time">Start Time</label>
+            <select id="res-start-time"></select>
           </div>
           <div>
             <label for="res-end-time">End Time</label>
             <select id="res-end-time"></select>
           </div>
-          <div>
-            <label for="res-type">Type</label>
-            <select id="res-type"></select>
-          </div>
-          <div>
-            <label for="res-qty">Quantity</label>
-            <select id="res-qty"></select>
-          </div>
         </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn secondary small" id="res-add-line" type="button">Add Type + Qty</button>
+        </div>
+        <div class="hint">Selected type lines for this reservation:</div>
+        <table style="margin-top:8px;">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Quantity</th>
+              <th style="width:120px;">Options</th>
+            </tr>
+          </thead>
+          <tbody id="res-lines-body"></tbody>
+        </table>
 
         <div class="hint" style="margin-top:10px;">Units are auto-assigned from Available inventory using least-recently-rented first.</div>
 
         <div class="row" style="margin-top:12px; justify-content:flex-end;">
+          <button class="btn warn" id="batch-potential" type="button">Convert Selected to Potential</button>
           <button class="btn danger" id="res-cancel" type="button">Cancel</button>
           <button class="btn" id="res-create" type="button">Create Reservation</button>
         </div>
@@ -142,10 +158,9 @@
           <div class="actions">
             <button class="btn small" id="batch-activate" type="button">Activate Selected</button>
             <button class="btn danger small" id="batch-cancel" type="button">Cancel Selected</button>
-            <button class="btn warn small" id="batch-potential" type="button">Convert to Potential</button>
           </div>
         </div>
-        <div class="hint" style="margin-bottom:8px;">Activate Selected and Convert to Potential require all entries with the same customer and start/end date+time to be selected.</div>
+        <div class="hint" style="margin-bottom:8px;">Activate Selected requires all entries with the same customer and start/end date+time to be selected.</div>
         <div class="empty" id="res-empty" style="display:none;">No reservations yet.</div>
         <table>
           <thead>
@@ -203,6 +218,7 @@
       let assets = [];
       let inventoryRows = [];
       let reservations = [];
+      let reservationLines = [];
       let confirmResolver = null;
       let promptResolver = null;
 
@@ -311,6 +327,30 @@
         }
       }
 
+      function renderReservationLines() {
+        const body = $("res-lines-body");
+        body.innerHTML = "";
+        if (!reservationLines.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="3" class="empty">No type lines selected yet.</td>`;
+          body.appendChild(tr);
+          return;
+        }
+        reservationLines.forEach((line, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(line.type)}</td>
+            <td>${line.quantity}</td>
+            <td><button class="btn danger small js-remove-line" data-idx="${idx}" type="button">Remove</button></td>
+          `;
+          tr.querySelector(".js-remove-line").addEventListener("click", () => {
+            reservationLines.splice(idx, 1);
+            renderReservationLines();
+          });
+          body.appendChild(tr);
+        });
+      }
+
       function formatTimeLabel(hour24, minute) {
         const ap = hour24 >= 12 ? "p" : "a";
         const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
@@ -365,6 +405,64 @@
         };
         input.addEventListener("focus", open);
         input.addEventListener("click", open);
+      }
+
+      let addressAutocomplete = null;
+      let googleMapsScriptLoadPromise = null;
+
+      function loadGoogleMapsScript(apiKey) {
+        if (googleMapsScriptLoadPromise) return googleMapsScriptLoadPromise;
+        googleMapsScriptLoadPromise = new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          const callbackName = "rentelInitPlacesCallback";
+          window[callbackName] = () => {
+            try {
+              delete window[callbackName];
+            } catch {
+              window[callbackName] = undefined;
+            }
+            resolve();
+          };
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&callback=${callbackName}`;
+          script.async = true;
+          script.defer = true;
+          script.onerror = () => {
+            reject(new Error("Failed to load Google Maps script."));
+          };
+          document.head.appendChild(script);
+        });
+        return googleMapsScriptLoadPromise;
+      }
+
+      async function initAddressAutocomplete() {
+        const addressInput = $("res-address");
+        if (!addressInput) return;
+        addressInput.setAttribute("autocomplete", "off");
+        try {
+          const config = await api("/api/public-config");
+          const apiKey =
+            config && typeof config.googleMapsApiKey === "string"
+              ? config.googleMapsApiKey.trim()
+              : "";
+          if (!apiKey) return;
+          await loadGoogleMapsScript(apiKey);
+          if (!window.google || !window.google.maps || !window.google.maps.places) return;
+          addressAutocomplete = new window.google.maps.places.Autocomplete(
+            addressInput,
+            {
+              fields: ["formatted_address"],
+              types: ["address"],
+            },
+          );
+          addressAutocomplete.addListener("place_changed", () => {
+            const place = addressAutocomplete.getPlace();
+            if (place && place.formatted_address) {
+              addressInput.value = place.formatted_address;
+            }
+          });
+        } catch {
+          // Keep manual address entry available if autocomplete cannot initialize.
+        }
       }
 
       function assignedUnitsText(entry) {
@@ -512,8 +610,7 @@
             startTime: $("res-start-time").value,
             endDate: $("res-end-date").value,
             endTime: $("res-end-time").value,
-            type: $("res-type").value,
-            quantity: Number($("res-qty").value || 0),
+            lineItems: reservationLines.slice(),
           };
 
           const startAt = parseLocalDateTime(payload.startDate, payload.startTime);
@@ -529,7 +626,9 @@
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setMsg(`Reservation ${created.orderNumber} created and unit(s) reserved.`, true);
+          setMsg(`${created.created || 0} reservation entr${created.created === 1 ? "y" : "ies"} created and units reserved.`, true);
+          reservationLines = [];
+          renderReservationLines();
           await loadData();
         } catch (err) {
           setMsg(String(err.message || err));
@@ -614,11 +713,10 @@
           setMsg("Select one or more reservation entries first.");
           return;
         }
-        if (action === "activate" || action === "potential") {
+        if (action === "activate") {
           const missing = missingGroupSelections(ids);
           if (missing.length > 0) {
-            const actionName = action === "activate" ? "Activate Selected" : "Convert to Potential";
-            setMsg(`${actionName} requires selecting all entries with the same customer and start/end date+time.`);
+            setMsg("Activate Selected requires selecting all entries with the same customer and start/end date+time.");
             return;
           }
         }
@@ -650,6 +748,8 @@
         $("res-end-time").value = "";
         $("res-type").value = "";
         $("res-qty").value = "1";
+        reservationLines = [];
+        renderReservationLines();
         setMsg("");
       }
 
@@ -664,6 +764,17 @@
         }
       });
 
+      $("res-add-line").addEventListener("click", () => {
+        const type = $("res-type").value;
+        const quantity = Number($("res-qty").value || 0);
+        if (!type || quantity < 1) {
+          setMsg("Select a Type and Quantity, then click Add Type + Qty.");
+          return;
+        }
+        reservationLines.push({ type, quantity });
+        renderReservationLines();
+        setMsg("");
+      });
       $("res-create").addEventListener("click", createReservation);
       $("res-cancel").addEventListener("click", cancelReservationEntry);
       $("batch-activate").addEventListener("click", () => runBatch("activate").catch((e) => setMsg(String(e.message || e))));
@@ -675,6 +786,8 @@
       populateQuantitySelect();
       wireDatePicker("res-start-date");
       wireDatePicker("res-end-date");
+      renderReservationLines();
+      void initAddressAutocomplete();
 
       loadData().catch((e) => setMsg("Failed to load reservations: " + String(e.message || e)));
     </script>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Potentials</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+      header { padding:18px 22px; background:var(--panel); border-bottom:1px solid var(--border); }
+      header h1 { margin:0; font-size:18px; }
+      .sub { margin-top:6px; color:var(--muted); font-size:13px; }
+      .brand { display:flex; align-items:center; gap:12px; }
+      .brand-logo { height:138px; width:auto; object-fit:contain; mix-blend-mode:screen; }
+      .top-nav { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
+      .nav-link { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid var(--border); text-decoration:none; color:var(--text); background:#141d28; font-size:12px; font-weight:600; }
+      .nav-link.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+      .nav-link-admin { margin-left:auto; }
+      main { max-width:1250px; margin:0 auto; padding:20px; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+      .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+      .btn { background:var(--accent); border:0; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:10px; }
+      thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody tr:last-child td { border-bottom:0; }
+      .empty { color:var(--muted); font-size:13px; }
+      .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
+      .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img class="brand-logo" src="/branding/logo" alt="" onerror="this.style.display='none'" />
+        <div>
+          <h1>Potentials</h1>
+          <div class="sub">Potential orders keep selected type and quantity only. No unit numbers are assigned here.</div>
+        </div>
+      </div>
+      <nav class="top-nav" aria-label="Primary">
+        <a class="nav-link" href="/dashboard">Dashboard</a>
+        <a class="nav-link" href="/reservations">Reservations</a>
+        <a class="nav-link" href="/on-rent">On Rent</a>
+        <a class="nav-link" href="/returned">Returned</a>
+        <a class="nav-link active" href="/potentials">Potentials</a>
+        <a class="nav-link" href="/inventory">Inventory</a>
+        <a class="nav-link nav-link-admin" href="/admin">Admin</a>
+        <a class="nav-link" href="/techs">Techs</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0;font-size:15px;">Potential List</h2>
+          <button class="btn" id="refresh-potentials" type="button">Refresh</button>
+        </div>
+        <div class="empty" id="potentials-empty" style="display:none;margin-top:8px;">No potential entries yet.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Order Number</th>
+              <th>Customer Name</th>
+              <th>Address</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Type</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody id="potentials-body"></tbody>
+        </table>
+        <div id="potentials-msg" class="msg" style="display:none;"></div>
+      </div>
+    </main>
+
+    <script src="/app-datetime.js"></script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function setMsg(message) {
+        const el = $("potentials-msg");
+        el.style.display = message ? "block" : "none";
+        el.textContent = message || "";
+      }
+
+      async function api(path) {
+        const res = await fetch(path, { headers: { "Content-Type": "application/json" } });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error((data && data.error) || "Request failed");
+        return data;
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function render(entries) {
+        const body = $("potentials-body");
+        const empty = $("potentials-empty");
+        body.innerHTML = "";
+        if (!entries || entries.length === 0) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="mono">${escapeHtml(entry.orderNumber)}</td>
+            <td>${escapeHtml(entry.customerName)}</td>
+            <td>${escapeHtml(entry.address)}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.startDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.startTime))}</td>
+            <td>${escapeHtml(window.RentelDateTime.formatDisplayDateYmd(entry.endDate))} ${escapeHtml(window.RentelDateTime.formatDisplayTimeHm(entry.endTime))}</td>
+            <td>${escapeHtml(entry.type)}</td>
+            <td>${escapeHtml(entry.quantity)}</td>
+          `;
+          body.appendChild(tr);
+        }
+      }
+
+      async function loadPotentials() {
+        try {
+          setMsg("");
+          const snapshot = await api("/api/reservations");
+          render((snapshot && snapshot.potentials) || []);
+        } catch (err) {
+          setMsg("Failed to load Potentials: " + String(err.message || err));
+          render([]);
+        }
+      }
+
+      $("refresh-potentials").addEventListener("click", loadPotentials);
+      loadPotentials();
+    </script>
+  </body>
+</html>

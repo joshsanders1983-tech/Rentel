@@ -180,7 +180,7 @@ export function reservationGroupKey(input: {
 }
 
 export async function getReservationsSnapshot() {
-  const [reservations, onRent, returnedOnRent, lastRows] = await Promise.all([
+  const [reservations, onRent, returnedOnRent, potentials, lastRows] = await Promise.all([
     prisma.reservationEntry.findMany({
       where: { listKind: "RESERVATION" },
       orderBy: { listEnteredAt: "desc" },
@@ -191,6 +191,10 @@ export async function getReservationsSnapshot() {
     }),
     prisma.reservationEntry.findMany({
       where: { listKind: "RETURNED" },
+      orderBy: { listEnteredAt: "desc" },
+    }),
+    prisma.reservationEntry.findMany({
+      where: { listKind: "POTENTIAL" },
       orderBy: { listEnteredAt: "desc" },
     }),
     prisma.lastRentedByUnit.findMany(),
@@ -205,6 +209,7 @@ export async function getReservationsSnapshot() {
     reservations: reservations.map(rowToReservationRecord),
     onRent: onRent.map(rowToOnRent),
     returnedOnRent: returnedOnRent.map(rowToReturned),
+    potentials: potentials.map(rowToReservationRecord),
     lastRentedByUnit,
   });
 }
@@ -309,7 +314,11 @@ export async function moveReservationToPotential(id: string) {
   if (!row) return null;
   const updated = await prisma.reservationEntry.update({
     where: { id },
-    data: { listKind: "POTENTIAL", listEnteredAt: now },
+    data: {
+      listKind: "POTENTIAL",
+      assignedUnits: [] as unknown as Prisma.InputJsonValue,
+      listEnteredAt: now,
+    },
   });
   return clone(rowToReservationRecord(updated));
 }

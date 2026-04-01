@@ -23,6 +23,7 @@ await migrateReservationsFromJsonFileIfNeeded();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
 const brandingLogoPath = process.env.BRANDING_LOGO_PATH?.trim() || "";
+const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY?.trim() || "";
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -47,6 +48,12 @@ app.get("/branding/logo", (_req, res) => {
   }
   res.type("png");
   createReadStream(brandingLogoPath).pipe(res);
+});
+
+app.get("/api/public-config", (_req, res) => {
+  res.json({
+    googleMapsApiKey,
+  });
 });
 
 app.use("/api/assets", apiAssetsRouter);
@@ -88,6 +95,10 @@ app.get("/on-rent", (_req, res) => {
 
 app.get("/returned", (_req, res) => {
   res.sendFile(join(publicDir, "returned.html"));
+});
+
+app.get("/potentials", (_req, res) => {
+  res.sendFile(join(publicDir, "potentials.html"));
 });
 
 app.get("/inventory", (_req, res) => {

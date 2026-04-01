@@ -74,6 +74,36 @@ async function buildShortageMessage(input: {
   return `${base} Only ${matchingReturnTimes.length} matching return(s) are currently scheduled (earliest ${formatDisplayDateTimeInstant(earliest)}); still short by ${stillShort} after those returns.`;
 }
 
+type ReservationLineItem = {
+  type: string;
+  quantity: number;
+};
+
+function parseLineItems(body: Record<string, unknown>): ReservationLineItem[] {
+  const rawLineItems = Array.isArray(body.lineItems) ? body.lineItems : [];
+  const parsed = rawLineItems
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const type = typeof row.type === "string" ? row.type.trim() : "";
+      const quantityRaw = Number(row.quantity);
+      const quantity = Number.isFinite(quantityRaw) ? Math.trunc(quantityRaw) : 0;
+      if (!type || quantity < 1) return null;
+      return { type, quantity };
+    })
+    .filter((x): x is ReservationLineItem => Boolean(x));
+
+  if (parsed.length > 0) return parsed;
+
+  const fallbackType = typeof body.type === "string" ? body.type.trim() : "";
+  const fallbackQuantityRaw = Number(body.quantity);
+  const fallbackQuantity = Number.isFinite(fallbackQuantityRaw)
+    ? Math.trunc(fallbackQuantityRaw)
+    : 0;
+  if (!fallbackType || fallbackQuantity < 1) return [];
+  return [{ type: fallbackType, quantity: fallbackQuantity }];
+}
+
 apiReservationsRouter.get("/", async (_req, res) => {
   res.json(await getReservationsSnapshot());
 });
@@ -89,9 +119,7 @@ apiReservationsRouter.post("/", async (req, res) => {
     typeof body.startTime === "string" ? body.startTime.trim() : "";
   const endDate = typeof body.endDate === "string" ? body.endDate.trim() : "";
   const endTime = typeof body.endTime === "string" ? body.endTime.trim() : "";
-  const type = typeof body.type === "string" ? body.type.trim() : "";
-  const quantityRaw = Number(body.quantity);
-  const quantity = Number.isFinite(quantityRaw) ? Math.trunc(quantityRaw) : 0;
+  const lineItems = parseLineItems(body);
   const manualUnitIds = Array.isArray(body.manualUnitIds)
     ? body.manualUnitIds.filter((x): x is string => typeof x === "string")
     : [];
@@ -103,12 +131,11 @@ apiReservationsRouter.post("/", async (req, res) => {
     !startTime ||
     !endDate ||
     !endTime ||
-    !type ||
-    quantity < 1
+    lineItems.length === 0
   ) {
     res.status(400).json({
       error:
-        "customerName, address, startDate, startTime, endDate, endTime, type, and quantity are required.",
+        "customerName, address, startDate, startTime, endDate, endTime, and at least one type/quantity line item are required.",
     });
     return;
   }
@@ -130,77 +157,92 @@ apiReservationsRouter.post("/", async (req, res) => {
     res.status(400).json({ error: "One or more manually selected units are not available." });
     return;
   }
-  if (manualUnits.length > quantity) {
+  const totalRequested = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+  if (manualUnits.length > totalRequested) {
     res.status(400).json({ error: "Manual unit selection exceeds reservation quantity." });
     return;
   }
 
   const lastRentedByUnit = await getLastRentedByUnit();
-  const manualSet = new Set(manualUnits.map((u) => u.id));
-  const targetType = upperText(type);
+  const consumedUnitIds = new Set<string>();
+  const perLineAssigned = new Map<number, typeof manualUnits>();
 
-  const matchingAuto = available
-    .filter((u) => !manualSet.has(u.id))
-    .filter((u) => upperText(u.asset.type) === targetType)
-    .sort((a, b) => {
-      const aLast = lastRentedByUnit[a.id];
-      const bLast = lastRentedByUnit[b.id];
-      if (!aLast && !bLast) {
-        return a.createdAt.getTime() - b.createdAt.getTime();
-      }
-      if (!aLast) return -1;
-      if (!bLast) return 1;
-      return new Date(aLast).getTime() - new Date(bLast).getTime();
-    });
+  for (let idx = 0; idx < lineItems.length; idx++) {
+    const line = lineItems[idx]!;
+    const targetType = upperText(line.type);
+    const matchingAuto = available
+      .filter((u) => !consumedUnitIds.has(u.id))
+      .filter((u) => upperText(u.asset.type) === targetType)
+      .sort((a, b) => {
+        const aLast = lastRentedByUnit[a.id];
+        const bLast = lastRentedByUnit[b.id];
+        if (!aLast && !bLast) {
+          return a.createdAt.getTime() - b.createdAt.getTime();
+        }
+        if (!aLast) return -1;
+        if (!bLast) return 1;
+        return new Date(aLast).getTime() - new Date(bLast).getTime();
+      });
 
-  const needed = quantity - manualUnits.length;
-  const autoUnits = matchingAuto.slice(0, needed);
-  const assigned = [...manualUnits, ...autoUnits];
-
-  if (assigned.length < quantity) {
-    const shortBy = quantity - assigned.length;
-    res.status(400).json({
-      error: await buildShortageMessage({
-        type,
-        quantity,
-        assignedCount: assigned.length,
-        shortBy,
-      }),
-    });
-    return;
+    const assigned = matchingAuto.slice(0, line.quantity);
+    if (assigned.length < line.quantity) {
+      const shortBy = line.quantity - assigned.length;
+      res.status(400).json({
+        error: await buildShortageMessage({
+          type: line.type,
+          quantity: line.quantity,
+          assignedCount: assigned.length,
+          shortBy,
+        }),
+      });
+      return;
+    }
+    assigned.forEach((u) => consumedUnitIds.add(u.id));
+    perLineAssigned.set(idx, assigned);
   }
 
-  const assignedIds = assigned.map((u) => u.id);
+  const assignedIds = Array.from(consumedUnitIds);
   await prisma.inventory.updateMany({
     where: { id: { in: assignedIds } },
     data: { status: STATUS_RESERVED, inspectionRequired: false },
   });
 
-  const reservation = await addReservation({
+  const groupKey = reservationGroupKey({
     customerName,
     address,
     startDate,
     startTime,
     endDate,
     endTime,
-    type,
-    quantity,
-    assignedUnits: assigned.map((u) => ({
-      unitId: u.id,
-      unitNumber: u.unitNumber,
-      type: u.asset.type,
-    })),
-    groupKey: reservationGroupKey({
+  });
+  const createdReservations = [];
+  for (let idx = 0; idx < lineItems.length; idx++) {
+    const line = lineItems[idx]!;
+    const assigned = perLineAssigned.get(idx) || [];
+    const reservation = await addReservation({
       customerName,
       address,
       startDate,
       startTime,
       endDate,
       endTime,
-    }),
-  });
+      type: line.type,
+      quantity: line.quantity,
+      assignedUnits: assigned.map((u) => ({
+        unitId: u.id,
+        unitNumber: u.unitNumber,
+        type: u.asset.type,
+      })),
+      groupKey,
+    });
+    createdReservations.push(reservation);
+  }
 
-  res.status(201).json(reservation);
+  res.status(201).json({
+    created: createdReservations.length,
+    reservations: createdReservations,
+    orderNumber: createdReservations[0]?.orderNumber ?? "",
+  });
 });
 
 apiReservationsRouter.post("/:id/activate", async (req, res) => {
