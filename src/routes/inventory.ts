@@ -677,19 +677,6 @@ apiInventoryRouter.get("/:id/service-history", requireTech, async (req, res) => 
   }
 });
 
-function inspectionItemSelectionLabel(item: {
-  selectedOk: boolean;
-  selectedNeedsAttention: boolean;
-  selectedDamaged: boolean;
-  selectedNa: boolean;
-}): string {
-  if (item.selectedOk) return "Ok";
-  if (item.selectedNeedsAttention) return "Needs attention";
-  if (item.selectedDamaged) return "Damaged";
-  if (item.selectedNa) return "N/A";
-  return "-";
-}
-
 apiInventoryRouter.get("/:id/inspection-history", requireTech, async (req, res) => {
   try {
     const id = typeof req.params.id === "string" ? req.params.id.trim() : "";
@@ -711,27 +698,22 @@ apiInventoryRouter.get("/:id/inspection-history", requireTech, async (req, res) 
       where: { inventoryId: id },
       orderBy: { submittedAt: "desc" },
       take: 200,
-      include: {
-        form: { select: { name: true } },
-        itemResults: {
-          orderBy: { id: "asc" },
-        },
+      select: {
+        id: true,
+        submittedAt: true,
+        hourMeterReading: true,
+        submittedByTechName: true,
       },
     });
 
     const entries = submissions.map((sub) => ({
       id: sub.id,
       submittedAt: sub.submittedAt.toISOString(),
-      formName: sub.form?.name ?? null,
       hourMeterReading:
         typeof sub.hourMeterReading === "number" && Number.isFinite(sub.hourMeterReading)
           ? sub.hourMeterReading
           : null,
       submittedByTechName: sub.submittedByTechName ?? null,
-      items: sub.itemResults.map((row) => ({
-        label: row.labelSnapshot,
-        selection: inspectionItemSelectionLabel(row),
-      })),
     }));
 
     res.json({

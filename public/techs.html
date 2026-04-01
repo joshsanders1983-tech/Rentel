@@ -71,7 +71,6 @@
       .techs-side-card { max-width:none !important; width:100%; min-width:0; }
       .techs-side-card .due-services-table-wrap { overflow-x:auto; margin-top:10px; -webkit-overflow-scrolling:touch; }
       .mobile-cards-table {}
-      .inspection-history-checklist { font-size:12px; line-height:1.45; word-break:break-word; }
       @media (max-width: 900px) {
         .techs-two-col { grid-template-columns: 1fr; }
       }
@@ -343,11 +342,9 @@
         <table class="mobile-cards-table">
           <thead>
             <tr>
-              <th style="width:170px;">Date</th>
-              <th style="width:140px;">Form</th>
-              <th style="width:80px;">Hours</th>
-              <th style="width:120px;">Tech</th>
-              <th>Checklist</th>
+              <th style="width:200px;">Date</th>
+              <th style="width:110px;">Unit hours</th>
+              <th style="width:140px;">Tech</th>
             </tr>
           </thead>
           <tbody id="inspection-history-body"></tbody>
@@ -745,15 +742,6 @@
         await Promise.all([loadMaintenance(), loadDueMaintenanceTasks()]);
       }
 
-      function formatInspectionChecklistLines(items) {
-        if (!Array.isArray(items) || items.length === 0) {
-          return "-";
-        }
-        return items
-          .map((it) => `${escapeHtml(it.label ?? "")}: ${escapeHtml(it.selection ?? "")}`)
-          .join("<br>");
-      }
-
       function renderInspectionHistoryRows(entries) {
         inspectionHistoryBody.innerHTML = "";
         if (!Array.isArray(entries) || entries.length === 0) {
@@ -771,12 +759,10 @@
               : "-";
           tr.innerHTML = `
             <td>${escapeHtml(formatDateTime(entry.submittedAt))}</td>
-            <td>${escapeHtml(entry.formName ?? "-")}</td>
             <td>${escapeHtml(hours)}</td>
             <td>${escapeHtml(entry.submittedByTechName ?? "-")}</td>
-            <td class="inspection-history-checklist">${formatInspectionChecklistLines(entry.items)}</td>
           `;
-          applyMobileLabels(tr, ["Date", "Form", "Hours", "Tech", "Checklist"]);
+          applyMobileLabels(tr, ["Date", "Unit hours", "Tech"]);
           inspectionHistoryBody.appendChild(tr);
         }
       }
