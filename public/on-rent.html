@@ -91,7 +91,6 @@
       <div class="card">
         <div class="row">
           <h2 style="margin:0;font-size:15px;">On Rent List</h2>
-          <button class="btn" id="refresh-onrent" type="button">Refresh</button>
         </div>
         <div class="empty" id="onrent-empty" style="display:none;margin-top:8px;">No active On Rent entries yet.</div>
         <table class="mobile-cards-table">
@@ -432,7 +431,6 @@
         }
       });
 
-      $("refresh-onrent").addEventListener("click", () => loadOnRent());
       loadOnRent();
     </script>
   </body>

@@ -57,7 +57,6 @@
       <div class="card">
         <div class="row">
           <h2 style="margin:0;font-size:15px;">Potential List</h2>
-          <button class="btn" id="refresh-potentials" type="button">Refresh</button>
         </div>
         <div class="empty" id="potentials-empty" style="display:none;margin-top:8px;">No potential entries yet.</div>
         <table>
@@ -172,7 +171,6 @@
         }
       }
 
-      $("refresh-potentials").addEventListener("click", loadPotentials);
       loadPotentials();
     </script>
   </body>
