@@ -8,9 +8,11 @@ dotenv.config({ path: join(backendRoot, "..", ".env") });
 const url = process.env.DATABASE_URL?.trim() ?? "";
 
 if (!url) {
-  console.error(
-    "[FATAL] DATABASE_URL is missing. Copy .env.example to .env and set DATABASE_URL (Supabase: Project Settings → Database → URI).",
-  );
+  const renderHint =
+    process.env.RENDER === "true"
+      ? " On Render: open the web service → Environment → add DATABASE_URL (your Postgres / Supabase connection URI)."
+      : " Copy .env.example to .env and set DATABASE_URL (Supabase: Project Settings → Database → URI).";
+  console.error(`[FATAL] DATABASE_URL is missing.${renderHint}`);
   process.exit(1);
 }
 
