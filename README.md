@@ -37,11 +37,12 @@ Use the **same** `DATABASE_URL` in **`.env`** on every computer so everyone shar
 
 ## Deploy on Render
 
-1. Create a **Web Service** from this GitHub repo.
+1. Create a **Web Service** from this GitHub repo (or connect **`render.yaml`** as a Blueprint).
 2. **Root Directory:** leave **empty** (repository root).
-3. **Build Command:** `npm install && npm run build && npm run db:deploy`
-4. **Start Command:** `npm start`
-5. **Environment:** **`DATABASE_URL`**, **`ADMIN_PASSWORD`** (and optional Supabase keys as above).
+3. **Build Command:** `npm ci && npm run build`
+4. **Pre-Deploy Command:** `npm run db:deploy` (applies Prisma migrations; requires **`DATABASE_URL`**)
+5. **Start Command:** `npm start`
+6. **Environment:** **`DATABASE_URL`**, **`ADMIN_PASSWORD`** (and optional Supabase keys as above).
 
 After deploy, open your **`https://….onrender.com`** URL. **`GET /health`** should return `"ok": true`.
 
