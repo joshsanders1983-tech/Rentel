@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
     <style>
       :root { --bg:#0f1419; --panel:#1a2332; --text:#e7ecf3; --muted:#8b9cb3; --accent:#3d9cf5; --border:#2a3647; --err:#f06b6b; }
       * { box-sizing: border-box; }
@@ -34,6 +48,30 @@
       tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
       tbody tr:last-child td { border-bottom:0; }
       .empty { color:var(--muted); font-size:13px; }
+      .map-card { margin-top:12px; }
+      .map-wrap { border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
+      #dashboard-map { width:100%; height:340px; background:#101723; }
+      .map-help { margin-top:8px; font-size:12px; color:var(--muted); }
+      .map-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:8px; }
+      .map-legend { display:flex; align-items:center; gap:12px; font-size:12px; color:var(--muted); }
+      .legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:5px; }
+      .legend-dot.delivery { background:#1e88e5; }
+      .legend-dot.pickup { background:#f57c00; }
+      .pin {
+        width:28px;
+        height:28px;
+        border-radius:50%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:14px;
+        font-weight:700;
+        color:#fff;
+        border:2px solid #fff;
+        box-shadow:0 1px 4px rgba(0,0,0,.45);
+      }
+      .pin.delivery { background:#1e88e5; }
+      .pin.pickup { background:#f57c00; }
       @media (max-width: 900px) { .grid { grid-template-columns:repeat(2,minmax(160px,1fr)); } }
       @media (max-width: 560px) { .grid { grid-template-columns:1fr; } }
       @media (max-width: 900px) {
@@ -96,6 +134,27 @@
         <div id="load-error" class="msg" style="display:none;"></div>
       </div>
 
+      <div class="card map-card">
+        <div class="section-head">
+          <h2>Upcoming Stops Map</h2>
+          <select id="map-basemap-select" class="filter-select" aria-label="Map basemap">
+            <option value="osm">OpenStreetMap</option>
+            <option value="google">Google Maps</option>
+          </select>
+        </div>
+        <div class="map-wrap">
+          <div id="dashboard-map" role="img" aria-label="Map showing delivery and pickup locations"></div>
+        </div>
+        <div class="map-toolbar">
+          <div class="map-legend" aria-live="polite">
+            <span><span class="legend-dot delivery"></span>D: <strong id="legend-deliveries-count">0</strong></span>
+            <span><span class="legend-dot pickup"></span>P: <strong id="legend-pickups-count">0</strong></span>
+          </div>
+          <div id="map-provider-note" class="map-help"></div>
+        </div>
+        <div class="map-help">Blue pins are deliveries (`D`). Orange pins are pickups (`P`). Nearby pins are clustered.</div>
+      </div>
+
       <div class="card">
         <div class="section-head">
           <h2>Upcoming Deliveries</h2>
@@ -148,9 +207,22 @@
     </main>
 
     <script src="/app-datetime.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.gridlayer.googlemutant@latest/Leaflet.GoogleMutant.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       let latestReservationsSnapshot = { reservations: [], onRent: [] };
+      const geocodeCache = new Map();
+      let dashboardMap = null;
+      let markersLayer = null;
+      let baseLayer = null;
+      let currentProvider = "osm";
+      let googleReady = false;
 
       function setMetric(id, value) {
         $(id).textContent = String(value);
@@ -261,6 +333,209 @@
         }
       }
 
+      function getFilteredEntries(entries, options) {
+        return entries
+          .filter((entry) => matchesFilter(entry, options))
+          .sort(
+            (a, b) =>
+              scheduleTimestamp(a[options.dateField], a[options.timeField]) -
+              scheduleTimestamp(b[options.dateField], b[options.timeField]),
+          );
+      }
+
+      function mapPinIcon(kind) {
+        const letter = kind === "delivery" ? "D" : "P";
+        const klass = kind === "delivery" ? "delivery" : "pickup";
+        return L.divIcon({
+          className: "",
+          html: `<div class="pin ${klass}" aria-hidden="true">${letter}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+      }
+
+      function updateLegendCounts(deliveriesCount, pickupsCount) {
+        $("legend-deliveries-count").textContent = String(deliveriesCount);
+        $("legend-pickups-count").textContent = String(pickupsCount);
+      }
+
+      function getGoogleMapsKey() {
+        if (window.RENTEL_GOOGLE_MAPS_API_KEY) return String(window.RENTEL_GOOGLE_MAPS_API_KEY).trim();
+        const local = window.localStorage.getItem("rentel-google-maps-key");
+        return local ? local.trim() : "";
+      }
+
+      function defaultMapProvider() {
+        return getGoogleMapsKey() ? "google" : "osm";
+      }
+
+      async function ensureGoogleMapsLoaded() {
+        if (googleReady) return true;
+        const key = getGoogleMapsKey();
+        if (!key) return false;
+        if (window.google && window.google.maps) {
+          googleReady = true;
+          return true;
+        }
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`;
+          script.async = true;
+          script.defer = true;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Unable to load Google Maps SDK."));
+          document.head.appendChild(script);
+        });
+        googleReady = Boolean(window.google && window.google.maps);
+        return googleReady;
+      }
+
+      async function applyBaseLayer(provider) {
+        if (!dashboardMap || typeof L === "undefined") return;
+        if (baseLayer) {
+          dashboardMap.removeLayer(baseLayer);
+          baseLayer = null;
+        }
+
+        if (provider === "google") {
+          const loaded = await ensureGoogleMapsLoaded();
+          if (loaded && typeof L.gridLayer.googleMutant === "function") {
+            baseLayer = L.gridLayer.googleMutant({ type: "roadmap" });
+            baseLayer.addTo(dashboardMap);
+            currentProvider = "google";
+            $("map-provider-note").textContent = "Google Maps basemap enabled.";
+            return;
+          }
+          $("map-provider-note").textContent = "Google Maps key not found. Using OpenStreetMap. Set window.RENTEL_GOOGLE_MAPS_API_KEY or localStorage key `rentel-google-maps-key`.";
+          $("map-basemap-select").value = "osm";
+        } else {
+          $("map-provider-note").textContent = "OpenStreetMap basemap enabled.";
+        }
+
+        baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 18,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        });
+        baseLayer.addTo(dashboardMap);
+        currentProvider = "osm";
+      }
+
+      function ensureMap() {
+        if (dashboardMap || typeof L === "undefined") return;
+        dashboardMap = L.map("dashboard-map", { scrollWheelZoom: false }).setView([39.8283, -98.5795], 4);
+        const preferredProvider = defaultMapProvider();
+        $("map-basemap-select").value = preferredProvider;
+        void applyBaseLayer(preferredProvider);
+        markersLayer = L.markerClusterGroup({
+          showCoverageOnHover: false,
+          spiderfyOnMaxZoom: true,
+          maxClusterRadius: 45,
+        }).addTo(dashboardMap);
+      }
+
+      async function geocodeAddress(address) {
+        const normalized = String(address || "").trim();
+        if (!normalized) return null;
+        if (geocodeCache.has(normalized)) return geocodeCache.get(normalized);
+
+        const localCacheKey = `rentel-geocode:${normalized.toLowerCase()}`;
+        const cachedLocal = window.localStorage.getItem(localCacheKey);
+        if (cachedLocal) {
+          try {
+            const parsed = JSON.parse(cachedLocal);
+            if (
+              parsed &&
+              typeof parsed.lat === "number" &&
+              Number.isFinite(parsed.lat) &&
+              typeof parsed.lng === "number" &&
+              Number.isFinite(parsed.lng)
+            ) {
+              geocodeCache.set(normalized, parsed);
+              return parsed;
+            }
+          } catch {
+            // Ignore bad local cache entries and re-geocode.
+          }
+        }
+
+        try {
+          const qs = encodeURIComponent(normalized);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${qs}&limit=1`,
+          );
+          if (!res.ok) throw new Error("Geocode request failed");
+          const rows = await res.json();
+          const first = Array.isArray(rows) ? rows[0] : null;
+          const lat = Number(first && first.lat);
+          const lng = Number(first && first.lon);
+          const point =
+            Number.isFinite(lat) && Number.isFinite(lng)
+              ? { lat, lng }
+              : null;
+          geocodeCache.set(normalized, point);
+          if (point) window.localStorage.setItem(localCacheKey, JSON.stringify(point));
+          return point;
+        } catch {
+          geocodeCache.set(normalized, null);
+          return null;
+        }
+      }
+
+      async function renderMapPins(snapshot) {
+        ensureMap();
+        if (!dashboardMap || !markersLayer) return;
+        markersLayer.clearLayers();
+
+        const reservations = (snapshot && snapshot.reservations) || [];
+        const onRent = (snapshot && snapshot.onRent) || [];
+
+        const filteredDeliveries = getFilteredEntries(reservations, {
+          dateField: "startDate",
+          timeField: "startTime",
+          filterId: "dash-deliveries-filter",
+        });
+        const filteredPickups = getFilteredEntries(onRent, {
+          dateField: "endDate",
+          timeField: "endTime",
+          filterId: "dash-pickups-filter",
+        });
+
+        const allEntries = [
+          ...filteredDeliveries.map((entry) => ({ entry, kind: "delivery", dateField: "startDate", timeField: "startTime" })),
+          ...filteredPickups.map((entry) => ({ entry, kind: "pickup", dateField: "endDate", timeField: "endTime" })),
+        ];
+        updateLegendCounts(filteredDeliveries.length, filteredPickups.length);
+
+        if (allEntries.length === 0) {
+          dashboardMap.setView([39.8283, -98.5795], 4);
+          return;
+        }
+
+        const bounds = L.latLngBounds([]);
+        for (const item of allEntries) {
+          const point = await geocodeAddress(item.entry.address);
+          if (!point) continue;
+          const marker = L.marker([point.lat, point.lng], {
+            icon: mapPinIcon(item.kind),
+            title: `${item.kind === "delivery" ? "Delivery" : "Pickup"}: ${item.entry.customerName || "Unknown customer"}`,
+          });
+          marker.bindPopup(`
+            <strong>${item.kind === "delivery" ? "Delivery" : "Pickup"}</strong><br/>
+            ${item.entry.customerName || "-"}<br/>
+            ${item.entry.address || "-"}<br/>
+            ${formatDateTime(item.entry[item.dateField], item.entry[item.timeField])}
+          `);
+          markersLayer.addLayer(marker);
+          bounds.extend([point.lat, point.lng]);
+        }
+
+        if (bounds.isValid()) {
+          dashboardMap.fitBounds(bounds.pad(0.25));
+        } else {
+          dashboardMap.setView([39.8283, -98.5795], 4);
+        }
+      }
+
       function renderReservationRows(reservationsSnapshot) {
         const reservations = (reservationsSnapshot && reservationsSnapshot.reservations) || [];
         const onRent = (reservationsSnapshot && reservationsSnapshot.onRent) || [];
@@ -279,6 +554,7 @@
           timeField: "endTime",
           filterId: "dash-pickups-filter",
         });
+        void renderMapPins(reservationsSnapshot);
       }
 
       function initFilters() {
@@ -286,6 +562,11 @@
         $("dash-pickups-filter").value = "next7";
         $("dash-deliveries-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
         $("dash-pickups-filter").addEventListener("change", () => renderReservationRows(latestReservationsSnapshot));
+        $("map-basemap-select").addEventListener("change", async () => {
+          const selected = $("map-basemap-select").value;
+          if (selected === currentProvider) return;
+          await applyBaseLayer(selected);
+        });
       }
 
       async function loadDashboard() {
