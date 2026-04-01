@@ -9,7 +9,9 @@
     "dev": "concurrently \"npm --prefix rental-backend run dev\" \"wait-on tcp:4000 && electron .\"",
     "build:backend": "npm --prefix rental-backend run build",
     "dist:win": "npm run build:backend && electron-builder --win nsis",
-    "publish:win": "npm run build:backend && electron-builder --win nsis --publish always"
+    "publish:win": "npm run build:backend && electron-builder --win nsis --publish always",
+    "render-build": "npm install --prefix rental-backend && npm run build --prefix rental-backend && npm run db:deploy --prefix rental-backend",
+    "render-start": "npm start --prefix rental-backend"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"

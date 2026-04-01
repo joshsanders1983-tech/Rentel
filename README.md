@@ -59,6 +59,23 @@ The app source is in:
 6. Open:
    - [http://localhost:4000](http://localhost:4000)
 
+## Deploy on Render (hosted URL in the browser)
+
+The repo root includes an **Electron** desktop wrapper. **Render must run the API in `rental-backend/`**, not Electron.
+
+1. Create a **Web Service** connected to this GitHub repo.
+2. **Root Directory:** leave **empty** (repository root).
+3. **Build Command:** `npm run render-build`
+4. **Start Command:** `npm run render-start`
+5. **Environment** (required):
+   - **`DATABASE_URL`** — your Postgres URL. Use your [Render PostgreSQL](https://render.com/docs/databases) **Internal Database URL** if the Web Service and database are both on Render (same account/region). Otherwise use your full `postgresql://…` URL (e.g. Supabase) with `sslmode=require` if your provider requires SSL.
+   - **`ADMIN_PASSWORD`** — strong password for the admin UI (same role as local `.env`).
+6. Optional: **`SUPABASE_URL`** and **`SUPABASE_ANON_KEY`** (see above). Optional: **`BRANDING_LOGO_PATH`** — absolute path to a PNG on the server if you add one later.
+
+After deploy, open the **`https://…onrender.com`** URL shown on the service. **`GET /health`** should return JSON with `"ok": true`.
+
+Local development is unchanged: from the repo root, **`npm start`** still runs the **desktop** app; **`npm run dev`** in `rental-backend` runs the API on your machine.
+
 ## Laptop Install + One-Click Desktop Icon (Windows)
 
 You do **not** need to open PowerShell and type `npm run dev` every time. Use one of these:
