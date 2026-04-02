@@ -124,12 +124,12 @@ async function ensureDefaultTechnician(): Promise<void> {
   `;
   const count = Number(countRows[0]?.count ?? 0);
   if (count > 0) return;
-  const nowIso = new Date().toISOString();
+  const now = new Date();
   const id = `tech_${randomBytes(12).toString("hex")}`;
   try {
     await prisma.$executeRaw`
       INSERT INTO "Technician" ("id", "techName", "username", "password", "active", "createdAt", "updatedAt")
-      VALUES (${id}, ${DEFAULT_TECH_NAME}, ${DEFAULT_TECH_USERNAME}, ${DEFAULT_TECH_PASSWORD}, ${true}, ${nowIso}, ${nowIso})
+      VALUES (${id}, ${DEFAULT_TECH_NAME}, ${DEFAULT_TECH_USERNAME}, ${DEFAULT_TECH_PASSWORD}, ${true}, ${now}, ${now})
     `;
   } catch {
     // Another request may have seeded the default technician first.
@@ -203,11 +203,11 @@ export async function createTechnician(
     throw new Error("That username is already in use.");
   }
 
-  const nowIso = new Date().toISOString();
+  const now = new Date();
   const id = `tech_${randomBytes(12).toString("hex")}`;
   await prisma.$executeRaw`
     INSERT INTO "Technician" ("id", "techName", "username", "password", "active", "createdAt", "updatedAt")
-    VALUES (${id}, ${techName}, ${username}, ${password}, ${true}, ${nowIso}, ${nowIso})
+    VALUES (${id}, ${techName}, ${username}, ${password}, ${true}, ${now}, ${now})
   `;
   const created = await getTechnicianById(id);
   if (!created) {
@@ -263,7 +263,7 @@ export async function updateTechnician(
     throw new Error("That username is already in use.");
   }
 
-  const nowIso = new Date().toISOString();
+  const now = new Date();
   await prisma.$executeRaw`
     UPDATE "Technician"
     SET
@@ -271,7 +271,7 @@ export async function updateTechnician(
       "username" = ${username},
       "password" = ${password},
       "active" = ${true},
-      "updatedAt" = ${nowIso}
+      "updatedAt" = ${now}
     WHERE "id" = ${technicianId}
   `;
   clearSessionsForTechnician(technicianId);
@@ -344,7 +344,7 @@ export function setTechSessionCookie(res: Response, token: string): void {
   );
 }
 
-export function clearTechSessionCookie(res: Response): void {
+function clearTechSessionCookie(res: Response): void {
   res.setHeader(
     "Set-Cookie",
     `${TECH_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,

@@ -16,6 +16,29 @@ type SettingsRow = {
   logoMime: string | null;
 };
 
+type HistoryAssignedUnit = {
+  unitId: string;
+  unitNumber: string;
+  type: string;
+};
+
+function parseHistoryAssignedUnits(input: unknown): HistoryAssignedUnit[] {
+  if (!Array.isArray(input)) return [];
+  const units: HistoryAssignedUnit[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const unitId = String(row.unitId ?? row.id ?? "").trim();
+    if (!unitId) continue;
+    units.push({
+      unitId,
+      unitNumber: String(row.unitNumber ?? "").trim(),
+      type: String(row.type ?? "").trim(),
+    });
+  }
+  return units;
+}
+
 function normalizeTheme(input: unknown): "dark" | "light" | null {
   const value = typeof input === "string" ? input.trim().toLowerCase() : "";
   if (value === "dark" || value === "light") return value;
@@ -125,6 +148,101 @@ apiAdminRouter.delete("/settings/logo", requireAdmin, async (_req, res) => {
       "updatedAt" = CURRENT_TIMESTAMP
   `;
   res.status(204).send();
+});
+
+apiAdminRouter.get("/history", requireAdmin, async (_req, res) => {
+  const [orderRows, repairRows, serviceRows] = await Promise.all([
+    prisma.reservationEntry.findMany({
+      orderBy: [{ createdAt: "desc" }, { listEnteredAt: "desc" }],
+      take: 5000,
+    }),
+    prisma.repairHistoryEntry.findMany({
+      include: {
+        inventory: {
+          select: {
+            unitNumber: true,
+            asset: {
+              select: {
+                type: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+    }),
+    prisma.serviceHistoryEntry.findMany({
+      include: {
+        inventory: {
+          select: {
+            unitNumber: true,
+            asset: {
+              select: {
+                type: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+    }),
+  ]);
+
+  const orders = orderRows.map((row) => ({
+    id: row.id,
+    orderNumber: row.orderNumber,
+    customerName: row.customerName,
+    address: row.address,
+    startDate: row.startDate,
+    startTime: row.startTime,
+    endDate: row.endDate,
+    endTime: row.endTime,
+    type: row.rentalType,
+    quantity: row.quantity,
+    listKind: row.listKind,
+    createdAt: row.createdAt.toISOString(),
+    activatedAt: row.activatedAt ? row.activatedAt.toISOString() : null,
+    returnedAt: row.returnedAt ? row.returnedAt.toISOString() : null,
+    assignedUnits: parseHistoryAssignedUnits(row.assignedUnits),
+  }));
+
+  const serviceEvents = [
+    ...repairRows.map((row) => ({
+      id: row.id,
+      source: "REPAIR" as const,
+      inventoryId: row.inventoryId,
+      unitNumber: row.inventory.unitNumber,
+      assetType: row.inventory.asset?.type ?? null,
+      action: row.action,
+      details: row.details,
+      techName: row.techName,
+      repairHours: row.repairHours,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    ...serviceRows.map((row) => ({
+      id: row.id,
+      source: "SERVICE" as const,
+      inventoryId: row.inventoryId,
+      unitNumber: row.inventory.unitNumber,
+      assetType: row.inventory.asset?.type ?? null,
+      action: "COMPLETED_SERVICE",
+      details: row.details,
+      techName: row.techName,
+      repairHours: row.repairHours,
+      createdAt: row.createdAt.toISOString(),
+    })),
+  ].sort((a, b) => {
+    const aTime = new Date(a.createdAt).getTime();
+    const bTime = new Date(b.createdAt).getTime();
+    return bTime - aTime;
+  });
+
+  res.json({
+    orders,
+    serviceEvents,
+  });
 });
 
 apiAdminRouter.post("/login", (req, res) => {

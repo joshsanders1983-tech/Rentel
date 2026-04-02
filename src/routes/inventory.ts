@@ -399,7 +399,9 @@ apiInventoryRouter.patch("/:id", requireAdmin, async (req, res) => {
 apiInventoryRouter.post("/manual-down", requireTech, async (req, res) => {
   try {
     const body = req.body as Record<string, unknown>;
-    const actorName = getTechSession(req)?.techName || "";
+    const techNameInput =
+      typeof body.techName === "string" ? body.techName.trim() : "";
+    const actorName = techNameInput || getTechSession(req)?.techName || "";
     const unitNumber =
       typeof body.unitNumber === "string" ? body.unitNumber.trim() : "";
     const reason =
