@@ -144,7 +144,7 @@
               <th style="width:140px; text-align:center;">Type</th>
               <th>Description</th>
               <th style="width:170px;">Status</th>
-              <th style="width:200px;">Last Rented</th>
+              <th style="width:200px;">Return Date/Time</th>
               <th style="width:210px;">Action</th>
             </tr>
           </thead>
@@ -473,6 +473,7 @@
       const techSessionName = $("tech-session-name");
 
       let lastRentedByUnit = {};
+      let returnedAtByUnit = {};
       let allInventoryRows = [];
       let returnedRows = [];
       let downRows = [];
@@ -560,6 +561,46 @@
         if (!value) return "Never";
         const dt = new Date(value);
         if (Number.isNaN(dt.getTime())) return "Never";
+        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
+      }
+
+      function mapReturnedAtByUnit(snapshot) {
+        const out = {};
+        const returnedOnRent =
+          snapshot && Array.isArray(snapshot.returnedOnRent) ? snapshot.returnedOnRent : [];
+        for (const returnedEntry of returnedOnRent) {
+          const returnedAt =
+            returnedEntry && typeof returnedEntry.returnedAt === "string"
+              ? returnedEntry.returnedAt
+              : "";
+          if (!returnedAt) continue;
+          const returnedAtMs = Date.parse(returnedAt);
+          if (Number.isNaN(returnedAtMs)) continue;
+          const assignedUnits = Array.isArray(returnedEntry.assignedUnits)
+            ? returnedEntry.assignedUnits
+            : [];
+          for (const unit of assignedUnits) {
+            const unitId = String(unit && unit.unitId ? unit.unitId : "").trim();
+            if (!unitId) continue;
+            const existing = out[unitId];
+            if (!existing) {
+              out[unitId] = returnedAt;
+              continue;
+            }
+            const existingMs = Date.parse(existing);
+            if (Number.isNaN(existingMs) || returnedAtMs > existingMs) {
+              out[unitId] = returnedAt;
+            }
+          }
+        }
+        return out;
+      }
+
+      function formatReturnDateTime(unitId) {
+        const value = returnedAtByUnit[unitId];
+        if (!value) return "-";
+        const dt = new Date(value);
+        if (Number.isNaN(dt.getTime())) return "-";
         return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
       }
 
@@ -1275,7 +1316,7 @@
             <td style="text-align:center;">${escapeHtml(row.asset?.type ?? "-")}</td>
             <td>${escapeHtml(row.asset?.description ?? "-")}</td>
             <td>${escapeHtml(row.status ?? "-")}</td>
-            <td>${escapeHtml(formatLastRented(row.id))}</td>
+            <td>${escapeHtml(formatReturnDateTime(row.id))}</td>
             <td>
               <div class="action-buttons">
                 <button class="btn small js-inspect" type="button">Inspect</button>
@@ -1283,7 +1324,7 @@
               </div>
             </td>
           `;
-          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Last Rented", "Action"]);
+          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Return Date/Time", "Action"]);
           tr.querySelector(".js-inspect").addEventListener("click", (ev) => {
             openInspectModal(row, ev.currentTarget).catch((e) =>
               setMsg(maintenanceError, "Failed to open inspection: " + String(e.message || e)),
@@ -1340,6 +1381,7 @@
         ]);
         allInventoryRows = Array.isArray(rows) ? rows : [];
         lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
+        returnedAtByUnit = mapReturnedAtByUnit(reservationSnapshot);
         returnedRows = allInventoryRows.filter((row) => isReturnedStatus(row.status));
         downRows = allInventoryRows.filter((row) => isDownStatus(row.status));
         setQueueCounts();

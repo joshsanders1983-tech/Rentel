@@ -37,17 +37,20 @@
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
       .label { font-size:12px; color:var(--muted); }
       .value { margin-top:6px; font-size:28px; font-weight:700; }
+      .metric-breakdown { margin-top:8px; font-size:12px; font-weight:600; line-height:1.35; white-space:pre-line; }
+      .metric-breakdown.available { color:#76d59b; }
+      .metric-breakdown.returned { color:#f2c572; }
       .list { margin:0; padding-left:18px; color:var(--muted); font-size:14px; line-height:1.45; }
       .row { margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; }
       .btn { display:inline-flex; align-items:center; text-decoration:none; background:var(--accent); color:#fff; border-radius:8px; padding:10px 14px; font-weight:600; font-size:14px; }
       .msg { color:var(--err); font-size:13px; margin-top:10px; white-space:pre-wrap; }
-      .warn-text { color:#f2c572; }
+      .row-shortage td { color:var(--err); font-weight:600; }
       .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
       .section-head h2 { margin:0; font-size:15px; }
       .filter-select { width:auto; min-width:170px; padding:8px 10px; font-size:13px; }
       table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
       thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px; border-bottom:1px solid var(--border); white-space:nowrap; }
-      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; }
+      tbody td { padding:10px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; vertical-align:top; overflow-wrap:anywhere; }
       tbody tr:last-child td { border-bottom:0; }
       .empty { color:var(--muted); font-size:13px; }
       .layout-row { margin-top:12px; display:grid; grid-template-columns:minmax(420px,1fr) minmax(360px,1fr); gap:12px; align-items:stretch; }
@@ -120,10 +123,12 @@
         <div class="card">
           <div class="label">Available Units</div>
           <div class="value" id="metric-available">-</div>
+          <div class="metric-breakdown available" id="metric-available-breakdown">-</div>
         </div>
         <div class="card">
           <div class="label">Returned Units</div>
           <div class="value" id="metric-returned">-</div>
+          <div class="metric-breakdown returned" id="metric-returned-breakdown">-</div>
         </div>
         <div class="card">
           <div class="label">Down Units</div>
@@ -150,9 +155,6 @@
               <tr>
                 <th>Customer Name</th>
                 <th>Address</th>
-                <th>Unit Number(s)</th>
-                <th>Type(s)</th>
-                <th>Fulfillment</th>
                 <th>Start Date/Time</th>
               </tr>
             </thead>
@@ -176,8 +178,6 @@
               <tr>
                 <th>Customer Name</th>
                 <th>Address</th>
-                <th>Unit Number(s)</th>
-                <th>Type(s)</th>
                 <th>End Date/Time</th>
               </tr>
             </thead>
@@ -225,6 +225,30 @@
         $(id).textContent = String(value);
       }
 
+      function setMetricBreakdown(id, lines) {
+        const el = $(id);
+        if (!el) return;
+        if (!Array.isArray(lines) || lines.length === 0) {
+          el.textContent = "-";
+          return;
+        }
+        el.textContent = lines.join("\n");
+      }
+
+      function typeQuantityBreakdown(rows) {
+        const counts = new Map();
+        for (const row of rows) {
+          const type = String(row && row.asset && row.asset.type ? row.asset.type : "").trim() || "Unknown";
+          counts.set(type, (counts.get(type) || 0) + 1);
+        }
+        return Array.from(counts.entries())
+          .sort((a, b) => {
+            if (b[1] !== a[1]) return b[1] - a[1];
+            return a[0].localeCompare(b[0]);
+          })
+          .map(([type, qty]) => `${type} - ${qty}`);
+      }
+
       function setError(msg) {
         const el = $("load-error");
         el.style.display = msg ? "block" : "none";
@@ -246,24 +270,16 @@
         return data;
       }
 
-      function assignedUnitNumbers(entry) {
-        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
-        return entry.assignedUnits.map((u) => u.unitNumber).join(", ");
-      }
+      function hasDeliveryShortage(entry) {
+        const explicitShortage = Number(entry && entry.shortageCount);
+        if (Number.isFinite(explicitShortage) && explicitShortage > 0) return true;
 
-      function assignedTypes(entry) {
-        if (!entry.assignedUnits || entry.assignedUnits.length === 0) return "-";
-        return Array.from(new Set(entry.assignedUnits.map((u) => u.type))).join(", ");
-      }
-
-      function fulfillmentText(entry) {
-        const shortage = Number(entry && entry.shortageCount) || 0;
-        if (shortage <= 0) return { text: "Ready", warn: false };
-        const iso = String(entry && entry.expectedFulfillmentDateTime ? entry.expectedFulfillmentDateTime : "").trim();
-        if (!iso) return { text: `Short ${shortage} (ETA unavailable)`, warn: true };
-        const dt = new Date(iso);
-        const eta = Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString();
-        return { text: `Short ${shortage} (ETA ${eta})`, warn: true };
+        const qty = Number(entry && entry.quantity);
+        if (!Number.isFinite(qty) || qty <= 0) return false;
+        const assignedCount = Array.isArray(entry && entry.assignedUnits)
+          ? entry.assignedUnits.length
+          : 0;
+        return assignedCount < qty;
       }
 
       function scheduleTimestamp(dateText, timeText) {
@@ -329,13 +345,13 @@
         for (const e of filteredEntries) {
           const tr = document.createElement("tr");
           const scheduledAt = formatDateTime(e[options.dateField], e[options.timeField]);
-          const fulfillment = fulfillmentText(e);
+          const isShortage = typeof options.shortageFn === "function"
+            ? options.shortageFn(e)
+            : false;
+          tr.className = isShortage ? "row-shortage" : "";
           tr.innerHTML = `
             <td>${e.customerName}</td>
             <td>${e.address}</td>
-            <td>${assignedUnitNumbers(e)}</td>
-            <td>${assignedTypes(e)}</td>
-            <td class="${fulfillment.warn ? "warn-text" : ""}">${fulfillment.text}</td>
             <td>${scheduledAt}</td>
           `;
           body.appendChild(tr);
@@ -552,6 +568,7 @@
           dateField: "startDate",
           timeField: "startTime",
           filterId: "dash-deliveries-filter",
+          shortageFn: hasDeliveryShortage,
         });
         renderReservationTableRows(onRent, {
           bodyId: "dash-pickups-body",
@@ -579,13 +596,17 @@
           ]);
           const inventoryRows = Array.isArray(inventory) ? inventory : [];
           const statusText = (row) => String(row.status || "").trim().toUpperCase();
-          const available = inventoryRows.filter((r) => statusText(r) === "AVAILABLE").length;
-          const returned = inventoryRows.filter((r) => statusText(r).startsWith("RETURN")).length;
+          const availableRows = inventoryRows.filter((r) => statusText(r) === "AVAILABLE");
+          const returnedRows = inventoryRows.filter((r) => statusText(r).startsWith("RETURN"));
+          const available = availableRows.length;
+          const returned = returnedRows.length;
           const down = inventoryRows.filter((r) => statusText(r).startsWith("DOWN")).length;
 
           setMetric("metric-available", available);
           setMetric("metric-returned", returned);
           setMetric("metric-down", down);
+          setMetricBreakdown("metric-available-breakdown", typeQuantityBreakdown(availableRows));
+          setMetricBreakdown("metric-returned-breakdown", typeQuantityBreakdown(returnedRows));
           latestReservationsSnapshot = {
             reservations: (reservationsSnapshot && reservationsSnapshot.reservations) || [],
             onRent: (reservationsSnapshot && reservationsSnapshot.onRent) || [],
@@ -596,6 +617,8 @@
           setMetric("metric-available", "-");
           setMetric("metric-returned", "-");
           setMetric("metric-down", "-");
+          setMetricBreakdown("metric-available-breakdown", []);
+          setMetricBreakdown("metric-returned-breakdown", []);
           latestReservationsSnapshot = { reservations: [], onRent: [] };
           renderReservationRows(latestReservationsSnapshot);
         }
