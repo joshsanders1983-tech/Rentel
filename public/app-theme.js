@@ -49,42 +49,69 @@
     style.id = HEADER_STYLE_ID;
     style.textContent = `
       body > header {
+        --plate-base-a: #222f40;
+        --plate-base-b: #151f2c;
+        --plate-shadow: rgba(0, 0, 0, 0.38);
+        --plate-hi: rgba(255, 255, 255, 0.2);
         position: relative;
         isolation: isolate;
         overflow: hidden;
-        background: linear-gradient(160deg, var(--panel) 0%, #121a26 62%, var(--accent) 185%);
+        background: linear-gradient(150deg, var(--plate-base-a) 0%, var(--plate-base-b) 58%, var(--accent) 220%);
         border-bottom: 1px solid var(--border);
-        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.42);
       }
       html[data-theme="light"] body > header {
-        background: linear-gradient(160deg, #f7fbff 0%, #dde8f6 62%, #b9d7f8 185%);
-        box-shadow: inset 0 -1px 0 rgba(22, 33, 47, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        --plate-base-a: #edf3fb;
+        --plate-base-b: #d6e2f0;
+        --plate-shadow: rgba(30, 54, 86, 0.2);
+        --plate-hi: rgba(255, 255, 255, 0.72);
+        background: linear-gradient(150deg, var(--plate-base-a) 0%, var(--plate-base-b) 58%, #aacbf1 220%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -1px 0 rgba(34, 55, 84, 0.18);
       }
       body > header::before {
         content: "";
         position: absolute;
         inset: 0;
         pointer-events: none;
-        opacity: 0.75;
+        opacity: 0.92;
         background:
-          repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.14) 0 1px, rgba(255, 255, 255, 0) 1px 30px),
-          repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.3) 0 1px, rgba(0, 0, 0, 0) 1px 30px);
+          repeating-linear-gradient(
+            -27deg,
+            transparent 0 18px,
+            var(--plate-hi) 18px 22px,
+            rgba(255, 255, 255, 0.05) 22px 27px,
+            var(--plate-shadow) 27px 31px,
+            transparent 31px 62px
+          ),
+          repeating-linear-gradient(
+            -27deg,
+            transparent 0 18px,
+            rgba(255, 255, 255, 0.11) 18px 22px,
+            rgba(255, 255, 255, 0.03) 22px 27px,
+            rgba(0, 0, 0, 0.25) 27px 31px,
+            transparent 31px 62px
+          );
+        background-size: 124px 64px, 124px 64px;
+        background-position: 0 0, 62px 32px;
       }
       html[data-theme="light"] body > header::before {
-        opacity: 0.45;
-        background:
-          repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.75) 0 1px, rgba(255, 255, 255, 0) 1px 30px),
-          repeating-linear-gradient(-45deg, rgba(23, 44, 78, 0.14) 0 1px, rgba(23, 44, 78, 0) 1px 30px);
+        opacity: 0.88;
       }
       body > header::after {
         content: "";
         position: absolute;
         inset: 0;
         pointer-events: none;
-        background: linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 42%, rgba(0, 0, 0, 0.28) 100%);
+        background:
+          linear-gradient(176deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 38%),
+          linear-gradient(6deg, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.25) 100%),
+          repeating-linear-gradient(104deg, rgba(255, 255, 255, 0.07) 0 1px, rgba(255, 255, 255, 0) 1px 14px);
       }
       html[data-theme="light"] body > header::after {
-        background: linear-gradient(165deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 50%, rgba(23, 44, 78, 0.08) 100%);
+        background:
+          linear-gradient(176deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 42%),
+          linear-gradient(8deg, rgba(23, 44, 78, 0) 46%, rgba(23, 44, 78, 0.12) 100%),
+          repeating-linear-gradient(104deg, rgba(255, 255, 255, 0.2) 0 1px, rgba(255, 255, 255, 0) 1px 14px);
       }
       body > header > * {
         position: relative;
