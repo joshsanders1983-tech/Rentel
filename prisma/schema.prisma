@@ -252,13 +252,18 @@ model ReservationEntry {
 
 /// Singleton app-level branding/theme settings.
 model AppSettings {
-  id                       String   @id @default("default")
-  theme                    String   @default("dark")
-  logoMime                 String?
-  logoBytes                Bytes?
-  historyLocationName      String?
-  historyLocationLatitude  Float?
-  historyLocationLongitude Float?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                                  String   @id @default("default")
+  theme                               String   @default("dark")
+  logoMime                            String?
+  logoBytes                           Bytes?
+  offloadOrderHistoryLocation         String?
+  offloadServiceHistoryLocation       String?
+  offloadDamageHistoryLocation        String?
+  offloadPostRentalInspectionsLocation String?
+  googleSheetsClientEmail             String?
+  googleSheetsPrivateKey              String?
+  googleSheetsSheetId                 String?
+  googleSheetsSheetGid                Int?
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
 }

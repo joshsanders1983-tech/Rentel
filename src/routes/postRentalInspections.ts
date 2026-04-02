@@ -32,16 +32,95 @@ type PostRentalFlaggedItem = {
   selectedOption: string;
 };
 
-function readSpreadsheetId(): string {
-  const configured = process.env.POST_RENTAL_INSPECTIONS_SHEET_ID?.trim() || "";
-  return configured || DEFAULT_SPREADSHEET_ID;
+type OffloadSettingsRow = {
+  offloadPostRentalInspectionsLocation: string | null;
+  googleSheetsClientEmail: string | null;
+  googleSheetsPrivateKey: string | null;
+  googleSheetsSheetId: string | null;
+  googleSheetsSheetGid: number | null;
+};
+
+type ResolvedOffloadConfig = {
+  spreadsheetId: string;
+  sheetGid: number;
+  googleSheetsClientEmail: string;
+  googleSheetsPrivateKey: string;
+};
+
+function parseSpreadsheetLocation(
+  rawLocation: string,
+): { spreadsheetId: string; sheetGid: number | null } | null {
+  const location = String(rawLocation || "").trim();
+  if (!location) return null;
+  const directIdMatch = location.match(/^[A-Za-z0-9-_]{20,}$/);
+  if (directIdMatch) {
+    return { spreadsheetId: directIdMatch[0], sheetGid: null };
+  }
+  try {
+    const url = new URL(location);
+    const pathMatch = url.pathname.match(/\/spreadsheets\/d\/([A-Za-z0-9-_]+)/);
+    const spreadsheetId = pathMatch?.[1] || "";
+    if (!spreadsheetId) return null;
+    const gidRaw = url.searchParams.get("gid");
+    const parsedGid = gidRaw === null ? Number.NaN : Number(gidRaw);
+    return {
+      spreadsheetId,
+      sheetGid: Number.isInteger(parsedGid) && parsedGid >= 0 ? parsedGid : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
-function readSheetGid(): number {
-  const raw = process.env.POST_RENTAL_INSPECTIONS_SHEET_GID?.trim() || "";
-  const parsed = Number(raw);
-  if (Number.isInteger(parsed) && parsed >= 0) return parsed;
-  return DEFAULT_SHEET_GID;
+async function loadOffloadConfig(): Promise<ResolvedOffloadConfig> {
+  const rows = await prisma.$queryRaw<OffloadSettingsRow[]>`
+    SELECT
+      "offloadPostRentalInspectionsLocation",
+      "googleSheetsClientEmail",
+      "googleSheetsPrivateKey",
+      "googleSheetsSheetId",
+      "googleSheetsSheetGid"
+    FROM "AppSettings"
+    WHERE "id" = 'default'
+    LIMIT 1
+  `;
+  const row = rows[0];
+  const locationParsed = parseSpreadsheetLocation(
+    row?.offloadPostRentalInspectionsLocation ? String(row.offloadPostRentalInspectionsLocation) : "",
+  );
+  const configuredSheetId = row?.googleSheetsSheetId ? String(row.googleSheetsSheetId).trim() : "";
+  const envSheetId = process.env.POST_RENTAL_INSPECTIONS_SHEET_ID?.trim() || "";
+  const spreadsheetId =
+    configuredSheetId || locationParsed?.spreadsheetId || envSheetId || DEFAULT_SPREADSHEET_ID;
+
+  const configuredGid =
+    typeof row?.googleSheetsSheetGid === "number" && Number.isInteger(row.googleSheetsSheetGid)
+      ? row.googleSheetsSheetGid
+      : null;
+  const envGidRaw = process.env.POST_RENTAL_INSPECTIONS_SHEET_GID?.trim() || "";
+  const envGidParsed = Number(envGidRaw);
+  const envGid =
+    Number.isInteger(envGidParsed) && envGidParsed >= 0 ? envGidParsed : null;
+  const sheetGid = configuredGid ?? locationParsed?.sheetGid ?? envGid ?? DEFAULT_SHEET_GID;
+
+  const configuredClientEmail = row?.googleSheetsClientEmail
+    ? String(row.googleSheetsClientEmail).trim()
+    : "";
+  const configuredPrivateKey = row?.googleSheetsPrivateKey
+    ? String(row.googleSheetsPrivateKey).replace(/\\n/g, "\n").trim()
+    : "";
+  const envClientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL?.trim() || "";
+  const envPrivateKeyRaw = process.env.GOOGLE_SHEETS_PRIVATE_KEY || "";
+  const envPrivateKey = envPrivateKeyRaw.replace(/\\n/g, "\n").trim();
+  const googleSheetsClientEmail = configuredClientEmail || envClientEmail;
+  const googleSheetsPrivateKey = configuredPrivateKey || envPrivateKey;
+
+  return {
+    spreadsheetId,
+    sheetGid,
+    googleSheetsClientEmail,
+    googleSheetsPrivateKey,
+  };
 }
 
 function parseFlaggedItems(raw: Prisma.JsonValue): PostRentalFlaggedItem[] {
@@ -73,14 +152,13 @@ function toBase64UrlJson(value: object): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
 
-async function getGoogleSheetsAccessToken(): Promise<string> {
-  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL?.trim() || "";
-  const privateKeyRaw = process.env.GOOGLE_SHEETS_PRIVATE_KEY || "";
-  const privateKey = privateKeyRaw.replace(/\\n/g, "\n").trim();
+async function getGoogleSheetsAccessToken(config: ResolvedOffloadConfig): Promise<string> {
+  const clientEmail = config.googleSheetsClientEmail;
+  const privateKey = config.googleSheetsPrivateKey;
 
   if (!clientEmail || !privateKey) {
     throw new Error(
-      "Google Sheets credentials are not configured. Set GOOGLE_SHEETS_CLIENT_EMAIL and GOOGLE_SHEETS_PRIVATE_KEY.",
+      "Google Sheets credentials are not configured. Add them in Admin > App Settings (or set GOOGLE_SHEETS_CLIENT_EMAIL and GOOGLE_SHEETS_PRIVATE_KEY in .env).",
     );
   }
 
@@ -260,9 +338,10 @@ apiPostRentalInspectionsRouter.post("/offload", requireTech, async (_req, res) =
       return;
     }
 
-    const spreadsheetId = readSpreadsheetId();
-    const sheetGid = readSheetGid();
-    const accessToken = await getGoogleSheetsAccessToken();
+    const offloadConfig = await loadOffloadConfig();
+    const spreadsheetId = offloadConfig.spreadsheetId;
+    const sheetGid = offloadConfig.sheetGid;
+    const accessToken = await getGoogleSheetsAccessToken(offloadConfig);
     const sheetTitle = await resolveSheetTitle(spreadsheetId, sheetGid, accessToken);
     const exportRows = rows.flatMap((row) => buildExportRows(row));
 

@@ -144,7 +144,7 @@
         </div>
 
         <div class="card">
-          <h2>Settings</h2>
+          <h2>App Settings</h2>
           <div class="sub">Choose your app theme and manage your company logo file.</div>
           <div class="grid-2" style="margin-top:12px;">
             <div>
@@ -167,6 +167,51 @@
               </div>
               <div id="settings-logo-meta" class="hint-note" style="margin-top:8px;"></div>
             </div>
+          </div>
+          <div style="margin-top:12px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#141d28;">
+            <div class="sub" style="color:var(--text); margin-top:0;">Offload Settings</div>
+            <div class="hint-note" style="margin-top:6px;">
+              Configure destination locations and Google Sheets credentials for exports.
+            </div>
+            <div class="grid-2" style="margin-top:10px;">
+              <div>
+                <label for="offload-order-history-location">Order History Offload Location</label>
+                <input id="offload-order-history-location" placeholder="e.g. Google Sheet URL or folder path" />
+              </div>
+              <div>
+                <label for="offload-service-history-location">Service History Offload Location</label>
+                <input id="offload-service-history-location" placeholder="e.g. Google Sheet URL or folder path" />
+              </div>
+              <div>
+                <label for="offload-damage-history-location">Damage History Offload Location</label>
+                <input id="offload-damage-history-location" placeholder="e.g. Google Sheet URL or folder path" />
+              </div>
+              <div>
+                <label for="offload-post-rental-location">Post Rental Inspections Offload Location</label>
+                <input id="offload-post-rental-location" placeholder="e.g. Google Sheet URL or folder path" />
+              </div>
+              <div>
+                <label for="offload-google-sheets-client-email">Google Sheets Client Email</label>
+                <input id="offload-google-sheets-client-email" placeholder="service-account@project.iam.gserviceaccount.com" />
+              </div>
+              <div>
+                <label for="offload-google-sheets-sheet-id">Google Sheet ID (optional)</label>
+                <input id="offload-google-sheets-sheet-id" placeholder="1amsUbJfgmT6b_A0CSym9BOpQlsx8vTFuoX1zgOeqPw4" />
+              </div>
+              <div>
+                <label for="offload-google-sheets-sheet-gid">Google Sheet GID (optional)</label>
+                <input id="offload-google-sheets-sheet-gid" type="number" min="0" step="1" placeholder="0" />
+              </div>
+              <div class="full">
+                <label for="offload-google-sheets-private-key">Google Sheets Private Key</label>
+                <textarea id="offload-google-sheets-private-key" placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"></textarea>
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <button id="settings-save-offload" type="button">Save Offload Settings</button>
+            </div>
+            <div id="settings-offload-error" class="msg" style="display:none;"></div>
+            <div id="settings-offload-success" class="msg" style="display:none; color:#6bd18c;"></div>
           </div>
           <div id="settings-error" class="msg" style="display:none;"></div>
           <div id="settings-success" class="msg" style="display:none; color:#6bd18c;"></div>
@@ -325,31 +370,6 @@
           <div class="sub">Read-only order and service history for reporting and exports.</div>
           <div class="row" style="margin-top:10px;">
             <button class="secondary" id="history-refresh" type="button">Refresh History</button>
-          </div>
-          <div style="margin-top:12px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#141d28;">
-            <div class="sub" style="color:var(--text); margin-top:0;">Location Point</div>
-            <div class="hint-note" style="margin-top:6px;">Set a reusable location point for this app deployment.</div>
-            <div class="grid-2" style="margin-top:10px;">
-              <div>
-                <label for="history-location-name">Location Name</label>
-                <input id="history-location-name" placeholder="e.g. Main Yard" />
-              </div>
-              <div></div>
-              <div>
-                <label for="history-location-latitude">Latitude</label>
-                <input id="history-location-latitude" type="number" step="0.000001" min="-90" max="90" placeholder="e.g. 41.8781" />
-              </div>
-              <div>
-                <label for="history-location-longitude">Longitude</label>
-                <input id="history-location-longitude" type="number" step="0.000001" min="-180" max="180" placeholder="e.g. -87.6298" />
-              </div>
-            </div>
-            <div class="row" style="margin-top:10px;">
-              <button id="history-location-save" type="button">Save Location Point</button>
-              <button class="secondary" id="history-location-clear" type="button">Clear</button>
-            </div>
-            <div id="history-location-error" class="msg" style="display:none;"></div>
-            <div id="history-location-success" class="msg" style="display:none; color:#6bd18c;"></div>
           </div>
           <div id="history-error" class="msg" style="display:none;"></div>
 
@@ -658,13 +678,6 @@
       const historyOrdersBody = $("history-orders-body");
       const historyServiceEmpty = $("history-service-empty");
       const historyServiceBody = $("history-service-body");
-      const historyLocationName = $("history-location-name");
-      const historyLocationLatitude = $("history-location-latitude");
-      const historyLocationLongitude = $("history-location-longitude");
-      const historyLocationSaveBtn = $("history-location-save");
-      const historyLocationClearBtn = $("history-location-clear");
-      const historyLocationErr = $("history-location-error");
-      const historyLocationSuccess = $("history-location-success");
       const settingsTheme = $("settings-theme");
       const settingsSaveThemeBtn = $("settings-save-theme");
       const settingsLogoInput = $("settings-logo-input");
@@ -673,6 +686,17 @@
       const settingsLogoMeta = $("settings-logo-meta");
       const settingsErr = $("settings-error");
       const settingsSuccess = $("settings-success");
+      const settingsSaveOffloadBtn = $("settings-save-offload");
+      const settingsOffloadErr = $("settings-offload-error");
+      const settingsOffloadSuccess = $("settings-offload-success");
+      const offloadOrderHistoryLocation = $("offload-order-history-location");
+      const offloadServiceHistoryLocation = $("offload-service-history-location");
+      const offloadDamageHistoryLocation = $("offload-damage-history-location");
+      const offloadPostRentalLocation = $("offload-post-rental-location");
+      const offloadGoogleSheetsClientEmail = $("offload-google-sheets-client-email");
+      const offloadGoogleSheetsPrivateKey = $("offload-google-sheets-private-key");
+      const offloadGoogleSheetsSheetId = $("offload-google-sheets-sheet-id");
+      const offloadGoogleSheetsSheetGid = $("offload-google-sheets-sheet-gid");
 
       let assets = [];
       let inventoryRows = [];
@@ -708,9 +732,9 @@
         setMsg(settingsSuccess, "");
       }
 
-      function clearHistoryLocationMessages() {
-        setMsg(historyLocationErr, "");
-        setMsg(historyLocationSuccess, "");
+      function clearOffloadSettingsMessages() {
+        setMsg(settingsOffloadErr, "");
+        setMsg(settingsOffloadSuccess, "");
       }
 
       function fileToDataUrl(file) {
@@ -1748,18 +1772,17 @@
         settingsLogoMeta.textContent = hasUploadedLogo
           ? `Current logo: ${settings.logoMime || "image"}`
           : "No logo uploaded.";
-      }
-
-      async function loadHistoryLocationPoint() {
-        const point = await api("/api/admin/settings/location-point");
-        historyLocationName.value = String(point && point.name ? point.name : "").trim();
-        historyLocationLatitude.value =
-          point && typeof point.latitude === "number" && Number.isFinite(point.latitude)
-            ? String(point.latitude)
-            : "";
-        historyLocationLongitude.value =
-          point && typeof point.longitude === "number" && Number.isFinite(point.longitude)
-            ? String(point.longitude)
+        const offload = settings && settings.offloadSettings ? settings.offloadSettings : {};
+        offloadOrderHistoryLocation.value = String(offload.orderHistoryLocation || "").trim();
+        offloadServiceHistoryLocation.value = String(offload.serviceHistoryLocation || "").trim();
+        offloadDamageHistoryLocation.value = String(offload.damageHistoryLocation || "").trim();
+        offloadPostRentalLocation.value = String(offload.postRentalInspectionsLocation || "").trim();
+        offloadGoogleSheetsClientEmail.value = String(offload.googleSheetsClientEmail || "").trim();
+        offloadGoogleSheetsPrivateKey.value = String(offload.googleSheetsPrivateKey || "");
+        offloadGoogleSheetsSheetId.value = String(offload.googleSheetsSheetId || "").trim();
+        offloadGoogleSheetsSheetGid.value =
+          typeof offload.googleSheetsSheetGid === "number" && Number.isFinite(offload.googleSheetsSheetGid)
+            ? String(offload.googleSheetsSheetGid)
             : "";
       }
 
@@ -1837,7 +1860,6 @@
           settle("Inspection mappings", loadInspectionAssetMappings),
           settle("Technicians", loadTechnicians),
           settle("Admin settings", loadAdminSettings),
-          settle("History location point", loadHistoryLocationPoint),
           settle("Maintenance rules", loadMaintenanceRules),
           settle("History", loadHistory),
         ]);
@@ -2174,75 +2196,45 @@
       historyRefreshBtn.addEventListener("click", async () => {
         setMsg(historyErr, "");
         try {
-          await Promise.all([loadHistory(), loadHistoryLocationPoint()]);
+          await loadHistory();
         } catch (e) {
           setMsg(historyErr, String(e.message || e));
         }
       });
 
-      historyLocationSaveBtn.addEventListener("click", async () => {
-        clearHistoryLocationMessages();
-        const name = historyLocationName.value.trim();
-        const latitudeText = historyLocationLatitude.value.trim();
-        const longitudeText = historyLocationLongitude.value.trim();
-        const latitude = latitudeText === "" ? null : Number(latitudeText);
-        const longitude = longitudeText === "" ? null : Number(longitudeText);
-        if ((latitude === null) !== (longitude === null)) {
-          setMsg(historyLocationErr, "Latitude and Longitude must both be filled, or both be blank.");
-          return;
-        }
-        if (latitude !== null && !Number.isFinite(latitude)) {
-          setMsg(historyLocationErr, "Latitude must be a valid number.");
-          return;
-        }
-        if (longitude !== null && !Number.isFinite(longitude)) {
-          setMsg(historyLocationErr, "Longitude must be a valid number.");
+      settingsSaveOffloadBtn.addEventListener("click", async () => {
+        clearOffloadSettingsMessages();
+        const sheetGidText = offloadGoogleSheetsSheetGid.value.trim();
+        const sheetGid = sheetGidText === "" ? null : Number(sheetGidText);
+        if (sheetGid !== null && (!Number.isInteger(sheetGid) || sheetGid < 0)) {
+          setMsg(settingsOffloadErr, "Google Sheet GID must be an integer greater than or equal to 0.");
           return;
         }
 
-        const originalText = historyLocationSaveBtn.textContent;
-        historyLocationSaveBtn.disabled = true;
-        historyLocationSaveBtn.textContent = "Saving...";
+        const originalText = settingsSaveOffloadBtn.textContent;
+        settingsSaveOffloadBtn.disabled = true;
+        settingsSaveOffloadBtn.textContent = "Saving...";
         try {
-          await api("/api/admin/settings/location-point", {
+          await api("/api/admin/settings/offload", {
             method: "PATCH",
             body: JSON.stringify({
-              name,
-              latitude,
-              longitude,
+              orderHistoryLocation: offloadOrderHistoryLocation.value.trim(),
+              serviceHistoryLocation: offloadServiceHistoryLocation.value.trim(),
+              damageHistoryLocation: offloadDamageHistoryLocation.value.trim(),
+              postRentalInspectionsLocation: offloadPostRentalLocation.value.trim(),
+              googleSheetsClientEmail: offloadGoogleSheetsClientEmail.value.trim(),
+              googleSheetsPrivateKey: offloadGoogleSheetsPrivateKey.value,
+              googleSheetsSheetId: offloadGoogleSheetsSheetId.value.trim(),
+              googleSheetsSheetGid: sheetGid,
             }),
           });
-          await loadHistoryLocationPoint();
-          setMsg(historyLocationSuccess, "Location point saved.");
+          await loadAdminSettings();
+          setMsg(settingsOffloadSuccess, "Offload settings saved.");
         } catch (e) {
-          setMsg(historyLocationErr, String(e.message || e));
+          setMsg(settingsOffloadErr, String(e.message || e));
         } finally {
-          historyLocationSaveBtn.disabled = false;
-          historyLocationSaveBtn.textContent = originalText;
-        }
-      });
-
-      historyLocationClearBtn.addEventListener("click", async () => {
-        clearHistoryLocationMessages();
-        const originalText = historyLocationClearBtn.textContent;
-        historyLocationClearBtn.disabled = true;
-        historyLocationClearBtn.textContent = "Clearing...";
-        try {
-          await api("/api/admin/settings/location-point", {
-            method: "PATCH",
-            body: JSON.stringify({
-              name: "",
-              latitude: null,
-              longitude: null,
-            }),
-          });
-          await loadHistoryLocationPoint();
-          setMsg(historyLocationSuccess, "Location point cleared.");
-        } catch (e) {
-          setMsg(historyLocationErr, String(e.message || e));
-        } finally {
-          historyLocationClearBtn.disabled = false;
-          historyLocationClearBtn.textContent = originalText;
+          settingsSaveOffloadBtn.disabled = false;
+          settingsSaveOffloadBtn.textContent = originalText;
         }
       });
 

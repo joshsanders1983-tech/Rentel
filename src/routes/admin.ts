@@ -15,9 +15,14 @@ export const apiAdminRouter = Router();
 type SettingsRow = {
   theme: string;
   logoMime: string | null;
-  historyLocationName: string | null;
-  historyLocationLatitude: number | null;
-  historyLocationLongitude: number | null;
+  offloadOrderHistoryLocation: string | null;
+  offloadServiceHistoryLocation: string | null;
+  offloadDamageHistoryLocation: string | null;
+  offloadPostRentalInspectionsLocation: string | null;
+  googleSheetsClientEmail: string | null;
+  googleSheetsPrivateKey: string | null;
+  googleSheetsSheetId: string | null;
+  googleSheetsSheetGid: number | null;
 };
 
 type HistoryAssignedUnit = {
@@ -49,11 +54,13 @@ function normalizeTheme(input: unknown): "dark" | "light" | null {
   return null;
 }
 
-function normalizeLocationCoordinate(
+function normalizeOptionalText(value: unknown): string | null {
+  const next = typeof value === "string" ? value.trim() : "";
+  return next ? next : null;
+}
+
+function normalizeSheetGid(
   value: unknown,
-  label: string,
-  min: number,
-  max: number,
 ): { ok: true; value: number | null } | { ok: false; error: string } {
   if (value === null || value === undefined || value === "") {
     return { ok: true, value: null };
@@ -64,18 +71,25 @@ function normalizeLocationCoordinate(
       : typeof value === "string"
         ? Number(value.trim())
         : Number.NaN;
-  if (!Number.isFinite(parsed)) {
-    return { ok: false, error: `${label} must be a valid number.` };
-  }
-  if (parsed < min || parsed > max) {
-    return { ok: false, error: `${label} must be between ${min} and ${max}.` };
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return { ok: false, error: "Google Sheet GID must be an integer greater than or equal to 0." };
   }
   return { ok: true, value: parsed };
 }
 
 async function getSettingsRow(): Promise<SettingsRow> {
   const rows = await prisma.$queryRaw<SettingsRow[]>`
-    SELECT "theme", "logoMime", "historyLocationName", "historyLocationLatitude", "historyLocationLongitude"
+    SELECT
+      "theme",
+      "logoMime",
+      "offloadOrderHistoryLocation",
+      "offloadServiceHistoryLocation",
+      "offloadDamageHistoryLocation",
+      "offloadPostRentalInspectionsLocation",
+      "googleSheetsClientEmail",
+      "googleSheetsPrivateKey",
+      "googleSheetsSheetId",
+      "googleSheetsSheetGid"
     FROM "AppSettings"
     WHERE "id" = 'default'
     LIMIT 1
@@ -89,9 +103,14 @@ async function getSettingsRow(): Promise<SettingsRow> {
   return {
     theme: "dark",
     logoMime: null,
-    historyLocationName: null,
-    historyLocationLatitude: null,
-    historyLocationLongitude: null,
+    offloadOrderHistoryLocation: null,
+    offloadServiceHistoryLocation: null,
+    offloadDamageHistoryLocation: null,
+    offloadPostRentalInspectionsLocation: null,
+    googleSheetsClientEmail: null,
+    googleSheetsPrivateKey: null,
+    googleSheetsSheetId: null,
+    googleSheetsSheetGid: null,
   };
 }
 
@@ -115,90 +134,89 @@ apiAdminRouter.get("/settings", requireAdmin, async (_req, res) => {
     theme,
     hasLogo: Boolean(row.logoMime),
     logoMime: row.logoMime || null,
-    historyLocationPoint: {
-      name: row.historyLocationName || "",
-      latitude:
-        typeof row.historyLocationLatitude === "number" &&
-        Number.isFinite(row.historyLocationLatitude)
-          ? row.historyLocationLatitude
-          : null,
-      longitude:
-        typeof row.historyLocationLongitude === "number" &&
-        Number.isFinite(row.historyLocationLongitude)
-          ? row.historyLocationLongitude
+    offloadSettings: {
+      orderHistoryLocation: row.offloadOrderHistoryLocation || "",
+      serviceHistoryLocation: row.offloadServiceHistoryLocation || "",
+      damageHistoryLocation: row.offloadDamageHistoryLocation || "",
+      postRentalInspectionsLocation: row.offloadPostRentalInspectionsLocation || "",
+      googleSheetsClientEmail: row.googleSheetsClientEmail || "",
+      googleSheetsPrivateKey: row.googleSheetsPrivateKey || "",
+      googleSheetsSheetId: row.googleSheetsSheetId || "",
+      googleSheetsSheetGid:
+        typeof row.googleSheetsSheetGid === "number" && Number.isInteger(row.googleSheetsSheetGid)
+          ? row.googleSheetsSheetGid
           : null,
     },
   });
 });
 
-apiAdminRouter.get("/settings/location-point", requireAdmin, async (_req, res) => {
-  const row = await getSettingsRow();
-  res.json({
-    name: row.historyLocationName || "",
-    latitude:
-      typeof row.historyLocationLatitude === "number" &&
-      Number.isFinite(row.historyLocationLatitude)
-        ? row.historyLocationLatitude
-        : null,
-    longitude:
-      typeof row.historyLocationLongitude === "number" &&
-      Number.isFinite(row.historyLocationLongitude)
-        ? row.historyLocationLongitude
-        : null,
-  });
-});
-
-apiAdminRouter.patch("/settings/location-point", requireAdmin, async (req, res) => {
+apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
   const body = req.body as Record<string, unknown>;
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const latitudeResult = normalizeLocationCoordinate(body.latitude, "Latitude", -90, 90);
-  if (!latitudeResult.ok) {
-    res.status(400).json({ error: latitudeResult.error });
+  const offloadOrderHistoryLocation = normalizeOptionalText(body.orderHistoryLocation);
+  const offloadServiceHistoryLocation = normalizeOptionalText(body.serviceHistoryLocation);
+  const offloadDamageHistoryLocation = normalizeOptionalText(body.damageHistoryLocation);
+  const offloadPostRentalInspectionsLocation = normalizeOptionalText(
+    body.postRentalInspectionsLocation,
+  );
+  const googleSheetsClientEmail = normalizeOptionalText(body.googleSheetsClientEmail);
+  const googleSheetsPrivateKey = normalizeOptionalText(body.googleSheetsPrivateKey);
+  const googleSheetsSheetId = normalizeOptionalText(body.googleSheetsSheetId);
+  const gidResult = normalizeSheetGid(body.googleSheetsSheetGid);
+  if (!gidResult.ok) {
+    res.status(400).json({ error: gidResult.error });
     return;
   }
-  const longitudeResult = normalizeLocationCoordinate(body.longitude, "Longitude", -180, 180);
-  if (!longitudeResult.ok) {
-    res.status(400).json({ error: longitudeResult.error });
-    return;
-  }
-  const latitude = latitudeResult.value;
-  const longitude = longitudeResult.value;
-  if ((latitude === null) !== (longitude === null)) {
-    res.status(400).json({
-      error: "Latitude and Longitude must both be provided, or both be empty.",
-    });
-    return;
-  }
+  const googleSheetsSheetGid = gidResult.value;
 
   await prisma.$executeRaw`
     INSERT INTO "AppSettings" (
       "id",
       "theme",
-      "historyLocationName",
-      "historyLocationLatitude",
-      "historyLocationLongitude"
+      "offloadOrderHistoryLocation",
+      "offloadServiceHistoryLocation",
+      "offloadDamageHistoryLocation",
+      "offloadPostRentalInspectionsLocation",
+      "googleSheetsClientEmail",
+      "googleSheetsPrivateKey",
+      "googleSheetsSheetId",
+      "googleSheetsSheetGid"
     )
     VALUES (
       'default',
       'dark',
-      ${name || null},
-      ${latitude},
-      ${longitude}
+      ${offloadOrderHistoryLocation},
+      ${offloadServiceHistoryLocation},
+      ${offloadDamageHistoryLocation},
+      ${offloadPostRentalInspectionsLocation},
+      ${googleSheetsClientEmail},
+      ${googleSheetsPrivateKey},
+      ${googleSheetsSheetId},
+      ${googleSheetsSheetGid}
     )
     ON CONFLICT ("id")
     DO UPDATE SET
-      "historyLocationName" = EXCLUDED."historyLocationName",
-      "historyLocationLatitude" = EXCLUDED."historyLocationLatitude",
-      "historyLocationLongitude" = EXCLUDED."historyLocationLongitude",
+      "offloadOrderHistoryLocation" = EXCLUDED."offloadOrderHistoryLocation",
+      "offloadServiceHistoryLocation" = EXCLUDED."offloadServiceHistoryLocation",
+      "offloadDamageHistoryLocation" = EXCLUDED."offloadDamageHistoryLocation",
+      "offloadPostRentalInspectionsLocation" = EXCLUDED."offloadPostRentalInspectionsLocation",
+      "googleSheetsClientEmail" = EXCLUDED."googleSheetsClientEmail",
+      "googleSheetsPrivateKey" = EXCLUDED."googleSheetsPrivateKey",
+      "googleSheetsSheetId" = EXCLUDED."googleSheetsSheetId",
+      "googleSheetsSheetGid" = EXCLUDED."googleSheetsSheetGid",
       "updatedAt" = CURRENT_TIMESTAMP
   `;
 
   res.json({
     ok: true,
-    locationPoint: {
-      name: name || "",
-      latitude,
-      longitude,
+    offloadSettings: {
+      orderHistoryLocation: offloadOrderHistoryLocation || "",
+      serviceHistoryLocation: offloadServiceHistoryLocation || "",
+      damageHistoryLocation: offloadDamageHistoryLocation || "",
+      postRentalInspectionsLocation: offloadPostRentalInspectionsLocation || "",
+      googleSheetsClientEmail: googleSheetsClientEmail || "",
+      googleSheetsPrivateKey: googleSheetsPrivateKey || "",
+      googleSheetsSheetId: googleSheetsSheetId || "",
+      googleSheetsSheetGid,
     },
   });
 });

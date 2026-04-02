@@ -12,13 +12,28 @@ export async function ensurePostgresSchemaCompat(): Promise<void> {
     `ALTER TABLE "RepairHistoryEntry" ADD COLUMN IF NOT EXISTS "laborHours" DOUBLE PRECISION;`,
   );
   await prisma.$executeRawUnsafe(
-    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "historyLocationName" TEXT;`,
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "offloadOrderHistoryLocation" TEXT;`,
   );
   await prisma.$executeRawUnsafe(
-    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "historyLocationLatitude" DOUBLE PRECISION;`,
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "offloadServiceHistoryLocation" TEXT;`,
   );
   await prisma.$executeRawUnsafe(
-    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "historyLocationLongitude" DOUBLE PRECISION;`,
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "offloadDamageHistoryLocation" TEXT;`,
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "offloadPostRentalInspectionsLocation" TEXT;`,
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "googleSheetsClientEmail" TEXT;`,
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "googleSheetsPrivateKey" TEXT;`,
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "googleSheetsSheetId" TEXT;`,
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "googleSheetsSheetGid" INTEGER;`,
   );
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "PostRentalInspection" (
