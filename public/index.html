@@ -15,6 +15,10 @@
       main { max-width:1100px; margin:0 auto; padding:20px; }
       .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
       .card h2 { margin:0 0 12px; font-size:15px; }
+      .filters { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
+      .filter-field { min-width:180px; display:flex; flex-direction:column; gap:6px; }
+      .filter-field label { font-size:12px; color:var(--muted); }
+      .filter-field select { background:#0d1117; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
       table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
       thead th { text-align:left; font-size:12px; color:var(--muted); background:#141d28; padding:10px 12px; border-bottom:1px solid var(--border); }
       tbody td { padding:10px 12px; border-bottom:1px solid rgba(42,54,71,.6); font-size:13px; }
@@ -55,6 +59,20 @@
     <main>
       <div class="card">
         <h2>Inventory</h2>
+        <div class="filters">
+          <div class="filter-field">
+            <label for="inventory-filter-type">Filter Type</label>
+            <select id="inventory-filter-type">
+              <option value="">All Types</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="inventory-filter-status">Filter Status</label>
+            <select id="inventory-filter-status">
+              <option value="">All Statuses</option>
+            </select>
+          </div>
+        </div>
         <div id="inventory-empty" class="empty" style="display:none;">No units found.</div>
         <table>
           <thead>
@@ -79,8 +97,11 @@
       const inventoryBody = $("inventory-body");
       const inventoryEmpty = $("inventory-empty");
       const inventoryError = $("inventory-error");
+      const filterType = $("inventory-filter-type");
+      const filterStatus = $("inventory-filter-status");
 
       let lastRentedByUnit = {};
+      let inventoryRows = [];
 
       function setMsg(el, msg) {
         el.style.display = msg ? "block" : "none";
@@ -136,12 +157,64 @@
         return Number.isInteger(value) ? String(value) : value.toFixed(1);
       }
 
-      function renderInventory(rows) {
+      function populateFilterOptions(rows) {
+        const prevType = filterType.value;
+        const prevStatus = filterStatus.value;
+
+        const typeSet = new Set();
+        const statusSet = new Set();
+        for (const r of rows || []) {
+          const type = String(r?.asset?.type || "").trim();
+          const status = String(r?.status || "").trim();
+          if (type) typeSet.add(type);
+          if (status) statusSet.add(status);
+        }
+
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        const types = Array.from(typeSet).sort((a, b) => collator.compare(a, b));
+        const statuses = Array.from(statusSet).sort((a, b) => collator.compare(a, b));
+
+        filterType.innerHTML = '<option value="">All Types</option>';
+        for (const value of types) {
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          filterType.appendChild(opt);
+        }
+
+        filterStatus.innerHTML = '<option value="">All Statuses</option>';
+        for (const value of statuses) {
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          filterStatus.appendChild(opt);
+        }
+
+        if (prevType && types.includes(prevType)) filterType.value = prevType;
+        if (prevStatus && statuses.includes(prevStatus)) filterStatus.value = prevStatus;
+      }
+
+      function getFilteredRows() {
+        const typeValue = String(filterType.value || "").trim();
+        const statusValue = String(filterStatus.value || "").trim();
+        return inventoryRows.filter((r) => {
+          const type = String(r?.asset?.type || "").trim();
+          const status = String(r?.status || "").trim();
+          if (typeValue && type !== typeValue) return false;
+          if (statusValue && status !== statusValue) return false;
+          return true;
+        });
+      }
+
+      function renderInventory() {
+        const rows = getFilteredRows();
         inventoryBody.innerHTML = "";
         if (!rows || rows.length === 0) {
+          inventoryEmpty.textContent = "No units match the selected filters.";
           inventoryEmpty.style.display = "block";
           return;
         }
+        inventoryEmpty.textContent = "No units found.";
         inventoryEmpty.style.display = "none";
 
         const unitCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -168,9 +241,14 @@
           api("/api/inventory"),
           api("/api/reservations"),
         ]);
+        inventoryRows = Array.isArray(rows) ? rows : [];
         lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
-        renderInventory(rows);
+        populateFilterOptions(inventoryRows);
+        renderInventory();
       }
+
+      filterType.addEventListener("change", renderInventory);
+      filterStatus.addEventListener("change", renderInventory);
 
       loadInventory().catch((e) => setMsg(inventoryError, "Failed to load inventory: " + String(e.message || e)));
     </script>

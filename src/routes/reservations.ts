@@ -11,7 +11,6 @@ import {
   convertPotentialToReservation,
   deletePotential,
   endOnRentBatch,
-  getLastRentedByUnit,
   getReservationsSnapshot,
   moveReservationToPotential,
   reservationGroupKey,
@@ -68,7 +67,7 @@ function parseAssignedUnitsFromJson(
 }
 
 async function autoAssignUpcomingReservations() {
-  const [reservationRows, inventoryRows, lastRentedByUnit] = await Promise.all([
+  const [reservationRows, inventoryRows] = await Promise.all([
     prisma.reservationEntry.findMany({
       where: { listKind: "RESERVATION" },
       orderBy: [{ startDate: "asc" }, { startTime: "asc" }, { createdAt: "asc" }],
@@ -77,12 +76,15 @@ async function autoAssignUpcomingReservations() {
       include: { asset: true },
       orderBy: { createdAt: "asc" },
     }),
-    getLastRentedByUnit(),
   ]);
 
-  const availableRows = inventoryRows.filter(
-    (row) => normalizeStatus(row.status) === STATUS_AVAILABLE,
-  );
+  const unitCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const availableRows = inventoryRows
+    .filter((row) => normalizeStatus(row.status) === STATUS_AVAILABLE)
+    .sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
   const inventoryById = new Map(inventoryRows.map((u) => [u.id, u]));
   const availableById = new Map(availableRows.map((u) => [u.id, u]));
   const consumedUnitIds = new Set<string>();
@@ -114,15 +116,7 @@ async function autoAssignUpcomingReservations() {
 
     const matchingAuto = availableRows
       .filter((u) => !consumedUnitIds.has(u.id))
-      .filter((u) => upperText(u.asset.type) === targetType)
-      .sort((a, b) => {
-        const aLast = lastRentedByUnit[a.id];
-        const bLast = lastRentedByUnit[b.id];
-        if (!aLast && !bLast) return a.createdAt.getTime() - b.createdAt.getTime();
-        if (!aLast) return -1;
-        if (!bLast) return 1;
-        return new Date(aLast).getTime() - new Date(bLast).getTime();
-      });
+      .filter((u) => upperText(u.asset.type) === targetType);
 
     const need = Math.max(0, row.quantity - keptAssigned.length);
     const added = matchingAuto.slice(0, need).map((u) => ({
@@ -276,6 +270,31 @@ apiReservationsRouter.post("/", async (req, res) => {
     res.status(400).json({
       error:
         "customerName, address, startDate, startTime, endDate, endTime, and at least one type/quantity line item are required.",
+    });
+    return;
+  }
+
+  const startAt = parseLocalDateTime(startDate, startTime);
+  const endAt = parseLocalDateTime(endDate, endTime);
+  if (!startAt || !endAt) {
+    res.status(400).json({
+      error: "Invalid start/end date or time format.",
+    });
+    return;
+  }
+
+  const nowAtMinute = new Date();
+  nowAtMinute.setSeconds(0, 0);
+  if (startAt.getTime() < nowAtMinute.getTime()) {
+    res.status(400).json({
+      error: "Start Date/Time cannot be earlier than the current Date/Time.",
+    });
+    return;
+  }
+
+  if (endAt.getTime() < startAt.getTime()) {
+    res.status(400).json({
+      error: "End Date/Time cannot be earlier than Start Date/Time.",
     });
     return;
   }

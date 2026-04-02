@@ -667,6 +667,14 @@
 
           const startAt = parseLocalDateTime(payload.startDate, payload.startTime);
           const endAt = parseLocalDateTime(payload.endDate, payload.endTime);
+          const nowAtMinute = new Date();
+          nowAtMinute.setSeconds(0, 0);
+          if (startAt && startAt < nowAtMinute) {
+            const msg = "Start Date/Time cannot be earlier than the current Date/Time.";
+            setMsg(msg);
+            window.alert(msg);
+            return;
+          }
           if (startAt && endAt && endAt < startAt) {
             const msg = "End Date/Time cannot be earlier than Start Date/Time.";
             setMsg(msg);
