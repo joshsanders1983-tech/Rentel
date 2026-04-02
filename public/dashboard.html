@@ -219,6 +219,7 @@
     <script>
       const $ = (id) => document.getElementById(id);
       let latestReservationsSnapshot = { reservations: [], onRent: [] };
+      let latestInventoryRows = [];
       const geocodeCache = new Map();
       let dashboardMap = null;
       let markersLayer = null;
@@ -226,6 +227,7 @@
       let currentProvider = "osm";
       let googleReady = false;
       let geocodeLastRequestAt = 0;
+      const DASHBOARD_CACHE_KEY = "rentel.dashboard.cache.v1";
 
       function setMetric(id, value) {
         $(id).textContent = String(value);
@@ -259,6 +261,85 @@
         const el = $("load-error");
         el.style.display = msg ? "block" : "none";
         el.textContent = msg || "";
+      }
+
+      function renderInventoryMetrics(rows) {
+        const inventoryRows = Array.isArray(rows) ? rows : [];
+        const statusText = (row) => String(row.status || "").trim().toUpperCase();
+        const availableRows = inventoryRows.filter((r) => statusText(r) === "AVAILABLE");
+        const returnedRows = inventoryRows.filter((r) => statusText(r).startsWith("RETURN"));
+        const available = availableRows.length;
+        const returned = returnedRows.length;
+        const down = inventoryRows.filter((r) => statusText(r).startsWith("DOWN")).length;
+        setMetric("metric-available", available);
+        setMetric("metric-returned", returned);
+        setMetric("metric-down", down);
+        setMetricBreakdown("metric-available-breakdown", typeQuantityBreakdown(availableRows));
+        setMetricBreakdown("metric-returned-breakdown", typeQuantityBreakdown(returnedRows));
+      }
+
+      function clearInventoryMetrics() {
+        setMetric("metric-available", "-");
+        setMetric("metric-returned", "-");
+        setMetric("metric-down", "-");
+        setMetricBreakdown("metric-available-breakdown", []);
+        setMetricBreakdown("metric-returned-breakdown", []);
+      }
+
+      function readDashboardCache() {
+        try {
+          const raw = window.localStorage.getItem(DASHBOARD_CACHE_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          const inventoryRows = Array.isArray(parsed && parsed.inventoryRows) ? parsed.inventoryRows : [];
+          const reservationsSnapshot =
+            parsed && typeof parsed.reservationsSnapshot === "object" && parsed.reservationsSnapshot
+              ? {
+                  reservations: Array.isArray(parsed.reservationsSnapshot.reservations)
+                    ? parsed.reservationsSnapshot.reservations
+                    : [],
+                  onRent: Array.isArray(parsed.reservationsSnapshot.onRent)
+                    ? parsed.reservationsSnapshot.onRent
+                    : [],
+                }
+              : { reservations: [], onRent: [] };
+          return { inventoryRows, reservationsSnapshot };
+        } catch {
+          return null;
+        }
+      }
+
+      function writeDashboardCache() {
+        try {
+          window.localStorage.setItem(
+            DASHBOARD_CACHE_KEY,
+            JSON.stringify({
+              inventoryRows: latestInventoryRows,
+              reservationsSnapshot: latestReservationsSnapshot,
+            }),
+          );
+        } catch {
+          // Ignore storage failures and keep in-memory state.
+        }
+      }
+
+      function hydrateDashboardFromCache() {
+        const cached = readDashboardCache();
+        if (!cached) {
+          clearInventoryMetrics();
+          renderReservationRows({ reservations: [], onRent: [] });
+          return;
+        }
+        latestInventoryRows = cached.inventoryRows;
+        latestReservationsSnapshot = cached.reservationsSnapshot;
+        renderInventoryMetrics(latestInventoryRows);
+        renderReservationRows(latestReservationsSnapshot);
+      }
+
+      function errorMessageFromReason(reason) {
+        if (!reason) return "Unknown error";
+        if (reason instanceof Error) return reason.message || "Unknown error";
+        return String(reason);
       }
 
       async function api(path) {
@@ -612,43 +693,51 @@
       }
 
       async function loadDashboard() {
-        try {
-          setError("");
-          const [inventory, reservationsSnapshot] = await Promise.all([
-            api("/api/inventory"),
-            api("/api/reservations"),
-          ]);
-          const inventoryRows = Array.isArray(inventory) ? inventory : [];
-          const statusText = (row) => String(row.status || "").trim().toUpperCase();
-          const availableRows = inventoryRows.filter((r) => statusText(r) === "AVAILABLE");
-          const returnedRows = inventoryRows.filter((r) => statusText(r).startsWith("RETURN"));
-          const available = availableRows.length;
-          const returned = returnedRows.length;
-          const down = inventoryRows.filter((r) => statusText(r).startsWith("DOWN")).length;
+        setError("");
+        const [inventoryResult, reservationsResult] = await Promise.allSettled([
+          api("/api/inventory"),
+          api("/api/reservations"),
+        ]);
 
-          setMetric("metric-available", available);
-          setMetric("metric-returned", returned);
-          setMetric("metric-down", down);
-          setMetricBreakdown("metric-available-breakdown", typeQuantityBreakdown(availableRows));
-          setMetricBreakdown("metric-returned-breakdown", typeQuantityBreakdown(returnedRows));
+        const errors = [];
+
+        if (inventoryResult.status === "fulfilled") {
+          latestInventoryRows = Array.isArray(inventoryResult.value) ? inventoryResult.value : [];
+        } else {
+          errors.push(`Inventory API: ${errorMessageFromReason(inventoryResult.reason)}`);
+        }
+
+        if (reservationsResult.status === "fulfilled") {
           latestReservationsSnapshot = {
-            reservations: (reservationsSnapshot && reservationsSnapshot.reservations) || [],
-            onRent: (reservationsSnapshot && reservationsSnapshot.onRent) || [],
+            reservations: (reservationsResult.value && reservationsResult.value.reservations) || [],
+            onRent: (reservationsResult.value && reservationsResult.value.onRent) || [],
           };
-          renderReservationRows(reservationsSnapshot);
-        } catch (err) {
-          setError("Failed to load dashboard data: " + String(err.message || err));
-          setMetric("metric-available", "-");
-          setMetric("metric-returned", "-");
-          setMetric("metric-down", "-");
-          setMetricBreakdown("metric-available-breakdown", []);
-          setMetricBreakdown("metric-returned-breakdown", []);
-          latestReservationsSnapshot = { reservations: [], onRent: [] };
-          renderReservationRows(latestReservationsSnapshot);
+        } else {
+          errors.push(`Reservations API: ${errorMessageFromReason(reservationsResult.reason)}`);
+        }
+
+        if (latestInventoryRows.length > 0 || inventoryResult.status === "fulfilled") {
+          renderInventoryMetrics(latestInventoryRows);
+        } else {
+          clearInventoryMetrics();
+        }
+
+        renderReservationRows(latestReservationsSnapshot);
+
+        if (
+          inventoryResult.status === "fulfilled" ||
+          reservationsResult.status === "fulfilled"
+        ) {
+          writeDashboardCache();
+        }
+
+        if (errors.length > 0) {
+          setError("Failed to refresh dashboard data:\n" + errors.join("\n"));
         }
       }
 
       initFilters();
+      hydrateDashboardFromCache();
       loadDashboard();
     </script>
   </body>
