@@ -4,6 +4,7 @@ import cors from "cors";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createReadStream, existsSync } from "node:fs";
+import { Prisma } from "@prisma/client";
 import { isDefaultAdminPasswordInUse } from "./lib/adminAuth.js";
 import { evaluateMaintenanceRulesForAllUnits } from "./lib/maintenanceAutomation.js";
 import { isTechAuthenticated } from "./lib/techAuth.js";
@@ -35,6 +36,45 @@ const transparentPngFallback = Buffer.from(
 const app = express();
 const port = Number(process.env.PORT) || 4000;
 const MAINTENANCE_BACKSTOP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function mapApiError(err: unknown): { status: number; error: string } {
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    return {
+      status: 503,
+      error: "Database unavailable. Unable to connect to the configured database.",
+    };
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === "P1001" || err.code === "P1002") {
+      return {
+        status: 503,
+        error: "Database unavailable. Unable to connect to the configured database.",
+      };
+    }
+    if (err.code === "P2021" || err.code === "P2022") {
+      return {
+        status: 503,
+        error: "Database schema is out of date. Run database migrations and retry.",
+      };
+    }
+  }
+
+  const message = String(
+    err && typeof err === "object" && "message" in err ? (err as { message?: unknown }).message : "",
+  );
+  if (
+    message.includes("Can't reach database server") ||
+    message.includes("Unable to connect to the configured database")
+  ) {
+    return {
+      status: 503,
+      error: "Database unavailable. Unable to connect to the configured database.",
+    };
+  }
+
+  return { status: 500, error: "Internal server error" };
+}
 
 app.use(cors());
 app.use(express.json());
@@ -178,7 +218,8 @@ app.use(
     _next: express.NextFunction,
   ) => {
     console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    const mapped = mapApiError(err);
+    res.status(mapped.status).json({ error: mapped.error });
   },
 );
 
