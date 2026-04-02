@@ -129,38 +129,36 @@ function parseDamagePhotos(raw: Prisma.JsonValue): string[] {
 function buildFlaggedItemsFromSubmissionResults(
   results: Array<{
     labelSnapshot: string;
+    selectedOk: boolean;
     selectedNeedsAttention: boolean;
     selectedDamaged: boolean;
+    selectedNa: boolean;
   }>,
 ): PostRentalFlaggedItem[] {
   const flagged: PostRentalFlaggedItem[] = [];
   for (const result of results) {
     const label = String(result.labelSnapshot || "").trim();
     if (!label) continue;
+    if (result.selectedOk || result.selectedNa) continue;
     if (result.selectedNeedsAttention) {
       flagged.push({ label, selectedOption: "Needs attention" });
       continue;
     }
     if (result.selectedDamaged) {
       flagged.push({ label, selectedOption: "Damaged" });
+      continue;
     }
+    flagged.push({ label, selectedOption: "Other" });
   }
   return flagged;
 }
 
 async function backfillPostRentalInspectionQueue(): Promise<number> {
-  const [existingRows, flaggedSubmissions] = await Promise.all([
+  const [existingRows, completedSubmissions] = await Promise.all([
     prisma.postRentalInspection.findMany({
       select: { inspectionSubmissionId: true },
     }),
     prisma.inspectionSubmission.findMany({
-      where: {
-        itemResults: {
-          some: {
-            OR: [{ selectedNeedsAttention: true }, { selectedDamaged: true }],
-          },
-        },
-      },
       include: {
         inventory: {
           include: { asset: true },
@@ -168,8 +166,10 @@ async function backfillPostRentalInspectionQueue(): Promise<number> {
         itemResults: {
           select: {
             labelSnapshot: true,
+            selectedOk: true,
             selectedNeedsAttention: true,
             selectedDamaged: true,
+            selectedNa: true,
           },
         },
       },
@@ -197,12 +197,11 @@ async function backfillPostRentalInspectionQueue(): Promise<number> {
     flaggedItemsJson: Prisma.InputJsonValue;
   }> = [];
 
-  for (const submission of flaggedSubmissions) {
+  for (const submission of completedSubmissions) {
     const submissionId = String(submission.id || "").trim();
     if (!submissionId || existingSubmissionIds.has(submissionId)) continue;
 
     const flaggedItems = buildFlaggedItemsFromSubmissionResults(submission.itemResults || []);
-    if (flaggedItems.length === 0) continue;
 
     rowsToCreate.push({
       inspectionSubmissionId: submissionId,

@@ -172,6 +172,18 @@ function buildPostRentalFlaggedItems(
   return flaggedItems;
 }
 
+function buildDownReasonFromFlaggedItems(flaggedItems: PostRentalFlaggedItem[]): string | null {
+  if (!Array.isArray(flaggedItems) || flaggedItems.length === 0) return null;
+  const reasonParts: string[] = [];
+  for (const item of flaggedItems) {
+    const label = String(item.label || "").trim();
+    const selectedOption = String(item.selectedOption || "").trim().toLowerCase();
+    if (!label || !selectedOption) continue;
+    reasonParts.push(`(${label}) ${selectedOption}`);
+  }
+  return reasonParts.length > 0 ? reasonParts.join(" | ") : null;
+}
+
 async function getOrCreateDefaultForm() {
   const existing = await prisma.inspectionForm.findFirst({
     orderBy: { createdAt: "asc" },
@@ -816,14 +828,7 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
       return;
     }
   }
-  const reasonParts: string[] = [];
-  if (damagedSelected && damageDescription) {
-    reasonParts.push(`Damaged: ${damageDescription}`);
-  }
-  if (needsAttentionSelected && issueDescription) {
-    reasonParts.push(`Needs attention: ${issueDescription}`);
-  }
-  const downReason = reasonParts.length > 0 ? reasonParts.join(" | ") : null;
+  const downReason = buildDownReasonFromFlaggedItems(postRentalFlaggedItems);
   const nextInventoryStatus =
     needsAttentionSelected || damagedSelected ? STATUS_DOWN : STATUS_AVAILABLE;
   const serviceStateOpts: InventoryServiceStateOptions | undefined =
@@ -875,23 +880,21 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
       include: { asset: true },
     });
 
-    if (postRentalFlaggedItems.length > 0) {
-      await tx.postRentalInspection.create({
-        data: {
-          inspectionSubmissionId: submission.id,
-          inventoryId,
-          unitNumberSnapshot: inventory.unitNumber,
-          assetTypeSnapshot: inventory.asset?.type ?? null,
-          assetDescriptionSnapshot: inventory.asset?.description ?? null,
-          techNameSnapshot: actorName || null,
-          submittedAt,
-          issueDescription: issueDescription || null,
-          damageDescription: damageDescription || null,
-          damagePhotosJson: damagePhotos as unknown as Prisma.InputJsonValue,
-          flaggedItemsJson: postRentalFlaggedItems as unknown as Prisma.InputJsonValue,
-        },
-      });
-    }
+    await tx.postRentalInspection.create({
+      data: {
+        inspectionSubmissionId: submission.id,
+        inventoryId,
+        unitNumberSnapshot: inventory.unitNumber,
+        assetTypeSnapshot: inventory.asset?.type ?? null,
+        assetDescriptionSnapshot: inventory.asset?.description ?? null,
+        techNameSnapshot: actorName || null,
+        submittedAt,
+        issueDescription: issueDescription || null,
+        damageDescription: damageDescription || null,
+        damagePhotosJson: damagePhotos as unknown as Prisma.InputJsonValue,
+        flaggedItemsJson: postRentalFlaggedItems as unknown as Prisma.InputJsonValue,
+      },
+    });
 
     return { unit: updated, inspectionSubmissionId: submission.id };
   });
