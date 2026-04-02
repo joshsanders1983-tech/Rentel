@@ -1,4 +1,4 @@
-const INVENTORY_CACHE_TTL_MS = 2000;
+const INVENTORY_CACHE_TTL_MS = 15_000;
 
 let inventoryCache: { expiresAt: number; payload: unknown[] } | null = null;
 

@@ -63,6 +63,8 @@ const STATUS_ON_RENT = "On Rent";
 const STATUS_RESERVED = "Reserved";
 const STATUS_RETURNED = "Returned";
 const SERVICE_REASON_PREFIX = "Service Due:";
+let maintenanceSchemaReady = false;
+let maintenanceSchemaInitPromise: Promise<void> | null = null;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -113,6 +115,15 @@ async function ensureMaintenanceAutomationSchemaSafe(context: string): Promise<b
 }
 
 export async function ensureMaintenanceAutomationSchema(): Promise<void> {
+  if (maintenanceSchemaReady) {
+    return;
+  }
+  if (maintenanceSchemaInitPromise) {
+    await maintenanceSchemaInitPromise;
+    return;
+  }
+
+  maintenanceSchemaInitPromise = (async () => {
   await run(`
     CREATE TABLE IF NOT EXISTS "InventoryMaintenanceCounter" (
       "inventoryId" TEXT PRIMARY KEY,
@@ -201,6 +212,16 @@ export async function ensureMaintenanceAutomationSchema(): Promise<void> {
   await run(`
     ALTER TABLE "MaintenanceTask" ADD COLUMN IF NOT EXISTS "completionInspectionSubmissionId" TEXT NULL
   `);
+  })();
+
+  try {
+    await maintenanceSchemaInitPromise;
+    maintenanceSchemaReady = true;
+  } catch (err) {
+    maintenanceSchemaInitPromise = null;
+    maintenanceSchemaReady = false;
+    throw err;
+  }
 }
 
 async function ensureCounterRows(inventoryIds: string[]): Promise<void> {

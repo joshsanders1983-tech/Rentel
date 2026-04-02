@@ -22,8 +22,64 @@ import { isSupabaseJsConfigured } from "./lib/supabaseClient.js";
 import { ensurePostgresSchemaCompat } from "./lib/ensurePostgresSchemaCompat.js";
 import { prisma } from "./lib/prisma.js";
 
-await migrateReservationsFromJsonFileIfNeeded();
-await ensurePostgresSchemaCompat();
+const STARTUP_BOOTSTRAP_RETRY_DELAYS_MS = [0, 2_000, 5_000, 10_000, 15_000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runStartupBootstrapOnce(): Promise<void> {
+  await migrateReservationsFromJsonFileIfNeeded();
+  await ensurePostgresSchemaCompat();
+}
+
+async function runStartupBootstrapWithRetry(): Promise<boolean> {
+  for (let attempt = 0; attempt < STARTUP_BOOTSTRAP_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = STARTUP_BOOTSTRAP_RETRY_DELAYS_MS[attempt] ?? 0;
+    if (delayMs > 0) {
+      console.warn(
+        `[startup] Retrying database bootstrap in ${delayMs}ms (attempt ${attempt + 1}/${STARTUP_BOOTSTRAP_RETRY_DELAYS_MS.length}).`,
+      );
+      await sleep(delayMs);
+    }
+    try {
+      await runStartupBootstrapOnce();
+      return true;
+    } catch (err) {
+      console.error(
+        `[startup] Database bootstrap failed (attempt ${attempt + 1}/${STARTUP_BOOTSTRAP_RETRY_DELAYS_MS.length}).`,
+        err,
+      );
+    }
+  }
+  return false;
+}
+
+let startupBootstrapReady = await runStartupBootstrapWithRetry();
+let startupBootstrapRecoveryInFlight = false;
+
+function scheduleStartupBootstrapRecoveryIfNeeded() {
+  if (startupBootstrapReady) return;
+  const recoveryTimer = setInterval(() => {
+    if (startupBootstrapRecoveryInFlight || startupBootstrapReady) return;
+    startupBootstrapRecoveryInFlight = true;
+    void runStartupBootstrapOnce()
+      .then(() => {
+        startupBootstrapReady = true;
+        console.log("[startup] Database bootstrap recovery succeeded.");
+        clearInterval(recoveryTimer);
+      })
+      .catch((err) => {
+        console.error("[startup] Background database bootstrap retry failed.", err);
+      })
+      .finally(() => {
+        startupBootstrapRecoveryInFlight = false;
+      });
+  }, 60_000);
+  recoveryTimer.unref();
+}
+
+scheduleStartupBootstrapRecoveryIfNeeded();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -85,6 +141,7 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "rentel",
     time: new Date().toISOString(),
+    startupBootstrap: startupBootstrapReady ? "ok" : "degraded",
     supabaseJs: isSupabaseJsConfigured() ? "configured" : "not_configured",
   });
 });
@@ -228,6 +285,11 @@ app.use(
 const server = app.listen(port, () => {
   console.log(`Rental backend running on http://localhost:${port}`);
   console.log(`Open http://localhost:${port}/ in your browser for Dashboard.`);
+  if (!startupBootstrapReady) {
+    console.warn(
+      "[startup] Service started in degraded mode because bootstrap queries did not complete. Database-backed routes may return 503 until connectivity stabilizes.",
+    );
+  }
   if (isDefaultAdminPasswordInUse()) {
     console.warn(
       "ADMIN_PASSWORD is not set. Using default admin password 'admin'. Set ADMIN_PASSWORD in .env.",

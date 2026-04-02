@@ -29,6 +29,14 @@ const STATUS_RESERVED = "Reserved";
 const STATUS_ON_RENT = "On Rent";
 const STATUS_RETURNED = "Returned";
 const STATUS_DOWN = "Down";
+const AUTO_ASSIGN_GET_INTERVAL_MS = (() => {
+  const parsed = Number(process.env.RESERVATIONS_AUTO_ASSIGN_GET_INTERVAL_MS);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 15_000;
+  return Math.floor(parsed);
+})();
+
+let autoAssignLastRunAt = 0;
+let autoAssignInFlight: Promise<void> | null = null;
 
 function upperText(value: unknown) {
   return String(value ?? "").trim().toUpperCase();
@@ -67,7 +75,7 @@ function parseAssignedUnitsFromJson(
   return out;
 }
 
-async function autoAssignUpcomingReservations() {
+async function recalculateAutoAssignments() {
   const [reservationRows, inventoryRows] = await Promise.all([
     prisma.reservationEntry.findMany({
       where: { listKind: "RESERVATION" },
@@ -183,6 +191,25 @@ async function autoAssignUpcomingReservations() {
   invalidateInventoryCache();
 }
 
+async function runAutoAssignUpcomingReservations(options?: { force?: boolean }) {
+  const force = Boolean(options?.force);
+  const now = Date.now();
+  if (!force && now - autoAssignLastRunAt < AUTO_ASSIGN_GET_INTERVAL_MS) {
+    return;
+  }
+
+  if (!autoAssignInFlight) {
+    autoAssignInFlight = (async () => {
+      await recalculateAutoAssignments();
+      autoAssignLastRunAt = Date.now();
+    })().finally(() => {
+      autoAssignInFlight = null;
+    });
+  }
+
+  await autoAssignInFlight;
+}
+
 function addReservationFulfillmentMeta(snapshot: Awaited<ReturnType<typeof getReservationsSnapshot>>) {
   const onRentReturnTimesByType = new Map<string, Date[]>();
   for (const order of snapshot.onRent) {
@@ -247,7 +274,11 @@ function parseLineItems(body: Record<string, unknown>): ReservationLineItem[] {
 }
 
 apiReservationsRouter.get("/", async (_req, res) => {
-  await autoAssignUpcomingReservations();
+  try {
+    await runAutoAssignUpcomingReservations();
+  } catch (err) {
+    console.error("[reservations] Auto-assign refresh failed during read.", err);
+  }
   const snapshot = await getReservationsSnapshot();
   res.json(addReservationFulfillmentMeta(snapshot));
 });
@@ -368,7 +399,7 @@ apiReservationsRouter.post("/", async (req, res) => {
     createdReservations.push(reservation);
   }
 
-  await autoAssignUpcomingReservations();
+  await runAutoAssignUpcomingReservations({ force: true });
   const snapshot = await getReservationsSnapshot();
   const createdIds = new Set(createdReservations.map((r) => r.id));
   const refreshedCreated = snapshot.reservations.filter((r) => createdIds.has(r.id));
@@ -620,7 +651,7 @@ apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
     data: { status: STATUS_RESERVED, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits([removeUnitId, addUnitId]);
-  await autoAssignUpcomingReservations();
+  await runAutoAssignUpcomingReservations({ force: true });
 
   res.json(updated);
 });
@@ -638,7 +669,7 @@ apiReservationsRouter.post("/:id/cancel", async (req, res) => {
     data: { status: STATUS_AVAILABLE, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits(canceled.assignedUnits.map((u) => u.unitId));
-  await autoAssignUpcomingReservations();
+  await runAutoAssignUpcomingReservations({ force: true });
 
   res.json({ ok: true });
 });
@@ -656,7 +687,7 @@ apiReservationsRouter.post("/:id/potential", async (req, res) => {
     data: { status: STATUS_AVAILABLE, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits(potential.assignedUnits.map((u) => u.unitId));
-  await autoAssignUpcomingReservations();
+  await runAutoAssignUpcomingReservations({ force: true });
 
   res.json({ ok: true });
 });
@@ -668,7 +699,7 @@ apiReservationsRouter.post("/:id/convert-to-reservation", async (req, res) => {
     res.status(404).json({ error: "Potential entry not found." });
     return;
   }
-  await autoAssignUpcomingReservations();
+  await runAutoAssignUpcomingReservations({ force: true });
   res.json({ ok: true, reservation: converted });
 });
 
