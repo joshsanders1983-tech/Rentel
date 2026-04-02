@@ -133,7 +133,7 @@
 
       <div class="card">
         <div class="row">
-          <h2>Returned</h2>
+          <h2>Returns</h2>
           <div class="sub" id="returned-count">0 units</div>
         </div>
         <div id="returned-empty" class="empty" style="display:none;">No returned units found.</div>
@@ -1374,8 +1374,16 @@
 
       async function loadMaintenance() {
         setMsg(maintenanceError, "");
-        const reservationSnapshot = await api("/api/reservations");
-        const rows = await api("/api/inventory");
+        const [inventoryResult, reservationResult] = await Promise.allSettled([
+          api("/api/inventory"),
+          api("/api/reservations"),
+        ]);
+        if (inventoryResult.status !== "fulfilled") {
+          throw inventoryResult.reason;
+        }
+        const rows = inventoryResult.value;
+        const reservationSnapshot =
+          reservationResult.status === "fulfilled" ? reservationResult.value : null;
         allInventoryRows = Array.isArray(rows) ? rows : [];
         returnedAtByUnit = mapReturnedAtByUnit(reservationSnapshot);
         returnedRows = allInventoryRows.filter((row) => isReturnedStatus(row.status));
@@ -1742,8 +1750,6 @@
           setMsg(dueTaskErr, String(e.message || e));
         }
       });
-
-      setPostInspectionsPanelOpen(false);
 
       (async () => {
         try {
