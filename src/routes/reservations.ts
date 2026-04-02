@@ -83,6 +83,7 @@ async function autoAssignUpcomingReservations() {
   const availableRows = inventoryRows.filter(
     (row) => normalizeStatus(row.status) === STATUS_AVAILABLE,
   );
+  const inventoryById = new Map(inventoryRows.map((u) => [u.id, u]));
   const availableById = new Map(availableRows.map((u) => [u.id, u]));
   const consumedUnitIds = new Set<string>();
   const updates: Array<{ id: string; assignedUnits: Array<{ unitId: string; unitNumber: string; type: string }> }> = [];
@@ -103,7 +104,10 @@ async function autoAssignUpcomingReservations() {
     const targetType = upperText(row.rentalType);
     const keptAssigned = existingAssigned.filter((u) => {
       if (consumedUnitIds.has(u.unitId)) return false;
-      if (upperText(u.type) !== targetType) return false;
+      const inventoryUnit = inventoryById.get(u.unitId);
+      if (!inventoryUnit) return false;
+      const status = normalizeStatus(inventoryUnit.status);
+      if (status !== STATUS_AVAILABLE && status !== STATUS_RESERVED) return false;
       consumedUnitIds.add(u.unitId);
       return true;
     });
