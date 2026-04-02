@@ -50,17 +50,28 @@ function Set-EnvValue {
 }
 
 function Test-NeedsDatabaseUrl([string]$url) {
-  if ([string]::IsNullOrWhiteSpace($url)) { return $true }
-  if ($url -match "\[.+\]") { return $true }
-  if ($url -match "USER:PASSWORD") { return $true }
-  if ($url -match "PROJECT-REF|REGION|YOUR-PASSWORD") { return $true }
-  if ($url -match "@HOST:5432") { return $true }
-  if ($url -notmatch "^(postgresql|postgres)://") { return $true }
+  $normalized = [string]$url
+  $normalized = $normalized.Trim().Trim('"')
+  if ([string]::IsNullOrWhiteSpace($normalized)) { return $true }
+  if ($normalized -match "\[.+\]") { return $true }
+  if ($normalized -match "USER:PASSWORD") { return $true }
+  if ($normalized -match "PROJECT-REF|REGION|YOUR-PASSWORD") { return $true }
+  if ($normalized -match "@HOST:5432") { return $true }
+  if ($normalized -match "\s") { return $true }
+  if ($normalized -notmatch "^(postgresql|postgres)://") { return $true }
+
+  try {
+    $uri = [System.Uri]$normalized
+    if ([string]::IsNullOrWhiteSpace($uri.Host)) { return $true }
+    if ($uri.Scheme -ne "postgresql" -and $uri.Scheme -ne "postgres") { return $true }
+  } catch {
+    return $true
+  }
+
   return $false
 }
 
-$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$backend = $repoRoot
+$backend = Split-Path -Parent $MyInvocation.MyCommand.Path
 $envExample = Join-Path $backend ".env.example"
 $envFile = Join-Path $backend ".env"
 
@@ -76,6 +87,14 @@ $npm = Get-Command npm -ErrorAction SilentlyContinue
 if (-not $node -or -not $npm) {
   Write-Host "Install Node.js LTS from https://nodejs.org/ and run this script again." -ForegroundColor Red
   exit 1
+}
+try {
+  $nodeVersion = (& node --version).Trim()
+  if ($nodeVersion -notmatch "^v22\.") {
+    Write-Host "Warning: Detected Node $nodeVersion; this project targets Node 22.x. Continuing anyway." -ForegroundColor Yellow
+  }
+} catch {
+  Write-Host "Warning: Unable to determine Node version." -ForegroundColor Yellow
 }
 
 if (-not (Test-Path $envFile)) {
