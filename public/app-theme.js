@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "rentel.theme";
+  const HEADER_STYLE_ID = "rentel-header-plate";
   const MOBILE_STYLE_ID = "rentel-mobile-helpers";
   const THEMES = {
     dark: {
@@ -40,6 +41,63 @@
       // Ignore localStorage failures.
     }
     return normalized;
+  }
+
+  function ensureHeaderPlateStyles() {
+    if (document.getElementById(HEADER_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = HEADER_STYLE_ID;
+    style.textContent = `
+      body > header {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        background: linear-gradient(160deg, var(--panel) 0%, #121a26 62%, var(--accent) 185%);
+        border-bottom: 1px solid var(--border);
+        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+      html[data-theme="light"] body > header {
+        background: linear-gradient(160deg, #f7fbff 0%, #dde8f6 62%, #b9d7f8 185%);
+        box-shadow: inset 0 -1px 0 rgba(22, 33, 47, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+      }
+      body > header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.75;
+        background:
+          repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.14) 0 1px, rgba(255, 255, 255, 0) 1px 30px),
+          repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.3) 0 1px, rgba(0, 0, 0, 0) 1px 30px);
+      }
+      html[data-theme="light"] body > header::before {
+        opacity: 0.45;
+        background:
+          repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.75) 0 1px, rgba(255, 255, 255, 0) 1px 30px),
+          repeating-linear-gradient(-45deg, rgba(23, 44, 78, 0.14) 0 1px, rgba(23, 44, 78, 0) 1px 30px);
+      }
+      body > header::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 42%, rgba(0, 0, 0, 0.28) 100%);
+      }
+      html[data-theme="light"] body > header::after {
+        background: linear-gradient(165deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 50%, rgba(23, 44, 78, 0.08) 100%);
+      }
+      body > header > * {
+        position: relative;
+        z-index: 1;
+      }
+      body > header h1 {
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+      }
+      html[data-theme="light"] body > header h1 {
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   function ensureMobileHelpers() {
@@ -91,8 +149,16 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", ensureMobileHelpers, { once: true });
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        ensureHeaderPlateStyles();
+        ensureMobileHelpers();
+      },
+      { once: true },
+    );
   } else {
+    ensureHeaderPlateStyles();
     ensureMobileHelpers();
   }
 
