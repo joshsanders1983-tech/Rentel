@@ -863,6 +863,10 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
       where: { id: inventoryId },
       data: {
         status: nextInventoryStatus,
+        ...(nextInventoryStatus === STATUS_AVAILABLE &&
+        normalizeStatus(inventory.status) !== STATUS_AVAILABLE
+          ? { createdAt: submittedAt }
+          : {}),
         ...(hourMeterReading !== null ? { hours: hourMeterReading } : {}),
         downReason: nextInventoryStatus === STATUS_DOWN ? downReason : null,
         inspectionRequired: false,

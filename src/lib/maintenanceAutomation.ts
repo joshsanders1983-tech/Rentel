@@ -61,6 +61,7 @@ const STATUS_AVAILABLE = "Available";
 const STATUS_DOWN = "Down";
 const STATUS_ON_RENT = "On Rent";
 const STATUS_RESERVED = "Reserved";
+const STATUS_RETURNED = "Returned";
 const SERVICE_REASON_PREFIX = "Service Due:";
 
 function nowIso(): string {
@@ -321,16 +322,18 @@ async function applyInventoryServiceState(
       Boolean(skipDownIds?.has(inventory.id)) && onlyServiceDueTasks;
     const currentStatus = normalizeStatus(inventory.status);
     const nextReason = hasOpenTasks ? reasons.join(" | ") : null;
-    const shouldProtectLiveRental =
-      currentStatus === STATUS_ON_RENT || currentStatus === STATUS_RESERVED;
+    const shouldProtectReservationLifecycleStatus =
+      currentStatus === STATUS_ON_RENT ||
+      currentStatus === STATUS_RESERVED ||
+      currentStatus === STATUS_RETURNED;
 
     const updates: Record<string, unknown> = {};
 
     if (hasOpenTasks && !skipServiceDueDowngrade) {
-      if (!shouldProtectLiveRental && currentStatus !== STATUS_DOWN) {
+      if (!shouldProtectReservationLifecycleStatus && currentStatus !== STATUS_DOWN) {
         updates.status = STATUS_DOWN;
       }
-      if (!shouldProtectLiveRental) {
+      if (!shouldProtectReservationLifecycleStatus) {
         updates.inspectionRequired = true;
       }
       if (inventory.downReason !== nextReason) {
@@ -346,6 +349,7 @@ async function applyInventoryServiceState(
         Number(inventory.inspectionRequired) === 0
       ) {
         updates.status = STATUS_AVAILABLE;
+        updates.createdAt = new Date();
       }
     }
 

@@ -609,11 +609,11 @@
       }
 
       async function loadData() {
-        const [assetsData, inventoryData, reservationData] = await Promise.all([
+        const [assetsData, reservationData] = await Promise.all([
           api("/api/assets"),
-          api("/api/inventory"),
           api("/api/reservations"),
         ]);
+        const inventoryData = await api("/api/inventory");
         assets = assetsData || [];
         inventoryRows = inventoryData || [];
         reservations = (reservationData && reservationData.reservations) || [];

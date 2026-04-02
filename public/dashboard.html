@@ -694,10 +694,8 @@
 
       async function loadDashboard() {
         setError("");
-        const [inventoryResult, reservationsResult] = await Promise.allSettled([
-          api("/api/inventory"),
-          api("/api/reservations"),
-        ]);
+        const [reservationsResult] = await Promise.allSettled([api("/api/reservations")]);
+        const [inventoryResult] = await Promise.allSettled([api("/api/inventory")]);
 
         const errors = [];
 

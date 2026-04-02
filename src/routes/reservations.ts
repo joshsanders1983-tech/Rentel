@@ -3,6 +3,7 @@ import {
   evaluateMaintenanceRulesForUnits,
   incrementRentalCycleCounters,
 } from "../lib/maintenanceAutomation.js";
+import { invalidateInventoryCache } from "../lib/inventoryCache.js";
 import { prisma } from "../lib/prisma.js";
 import {
   addReservation,
@@ -78,13 +79,16 @@ async function autoAssignUpcomingReservations() {
     }),
   ]);
 
-  const unitCollator = new Intl.Collator(undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
   const availableRows = inventoryRows
     .filter((row) => normalizeStatus(row.status) === STATUS_AVAILABLE)
-    .sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const availableByType = new Map<string, typeof availableRows>();
+  const availableCursorByType = new Map<string, number>();
+  for (const row of availableRows) {
+    const key = upperText(row.asset.type);
+    if (!availableByType.has(key)) availableByType.set(key, []);
+    availableByType.get(key)!.push(row);
+  }
   const inventoryById = new Map(inventoryRows.map((u) => [u.id, u]));
   const availableById = new Map(availableRows.map((u) => [u.id, u]));
   const consumedUnitIds = new Set<string>();
@@ -114,17 +118,22 @@ async function autoAssignUpcomingReservations() {
       return true;
     });
 
-    const matchingAuto = availableRows
-      .filter((u) => !consumedUnitIds.has(u.id))
-      .filter((u) => upperText(u.asset.type) === targetType);
-
     const need = Math.max(0, row.quantity - keptAssigned.length);
-    const added = matchingAuto.slice(0, need).map((u) => ({
-      unitId: u.id,
-      unitNumber: u.unitNumber,
-      type: u.asset.type,
-    }));
-    added.forEach((u) => consumedUnitIds.add(u.unitId));
+    const pool = availableByType.get(targetType) || [];
+    let cursor = availableCursorByType.get(targetType) || 0;
+    const added: Array<{ unitId: string; unitNumber: string; type: string }> = [];
+    while (added.length < need && cursor < pool.length) {
+      const candidate = pool[cursor]!;
+      cursor += 1;
+      if (consumedUnitIds.has(candidate.id)) continue;
+      consumedUnitIds.add(candidate.id);
+      added.push({
+        unitId: candidate.id,
+        unitNumber: candidate.unitNumber,
+        type: candidate.asset.type,
+      });
+    }
+    availableCursorByType.set(targetType, cursor);
 
     const nextAssigned = [...keptAssigned, ...added];
     nextAssigned.forEach((u) => finalAssignedUnitIds.add(u.unitId));
@@ -171,6 +180,7 @@ async function autoAssignUpcomingReservations() {
       });
     }
   });
+  invalidateInventoryCache();
 }
 
 function addReservationFulfillmentMeta(snapshot: Awaited<ReturnType<typeof getReservationsSnapshot>>) {
@@ -387,6 +397,7 @@ apiReservationsRouter.post("/:id/activate", async (req, res) => {
     where: { id: { in: activated.assignedUnits.map((u) => u.unitId) } },
     data: { status: STATUS_ON_RENT, inspectionRequired: false },
   });
+  invalidateInventoryCache();
 
   res.json(activated);
 });
@@ -414,6 +425,7 @@ apiReservationsRouter.post("/on-rent/:id/end-now", async (req, res) => {
       },
     });
     await incrementRentalCycleCounters(affectedUnitIds);
+    invalidateInventoryCache();
   }
 
   res.json({
@@ -445,6 +457,7 @@ apiReservationsRouter.post("/returned/:id/restore", async (req, res) => {
       },
     });
     await evaluateMaintenanceRulesForUnits(affectedUnitIds);
+    invalidateInventoryCache();
   }
 
   res.json({
@@ -531,6 +544,7 @@ apiReservationsRouter.post("/on-rent/:id/swap-unit", async (req, res) => {
     data: { status: STATUS_ON_RENT, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits([removeUnitId, addUnit.id]);
+  invalidateInventoryCache();
 
   res.json({
     ok: true,
@@ -606,6 +620,7 @@ apiReservationsRouter.post("/:id/swap-unit", async (req, res) => {
     data: { status: STATUS_RESERVED, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits([removeUnitId, addUnitId]);
+  await autoAssignUpcomingReservations();
 
   res.json(updated);
 });
@@ -623,6 +638,7 @@ apiReservationsRouter.post("/:id/cancel", async (req, res) => {
     data: { status: STATUS_AVAILABLE, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits(canceled.assignedUnits.map((u) => u.unitId));
+  await autoAssignUpcomingReservations();
 
   res.json({ ok: true });
 });
@@ -640,6 +656,7 @@ apiReservationsRouter.post("/:id/potential", async (req, res) => {
     data: { status: STATUS_AVAILABLE, inspectionRequired: false },
   });
   await evaluateMaintenanceRulesForUnits(potential.assignedUnits.map((u) => u.unitId));
+  await autoAssignUpcomingReservations();
 
   res.json({ ok: true });
 });
@@ -651,6 +668,7 @@ apiReservationsRouter.post("/:id/convert-to-reservation", async (req, res) => {
     res.status(404).json({ error: "Potential entry not found." });
     return;
   }
+  await autoAssignUpcomingReservations();
   res.json({ ok: true, reservation: converted });
 });
 

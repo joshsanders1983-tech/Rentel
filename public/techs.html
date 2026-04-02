@@ -202,7 +202,6 @@
               <th>Description</th>
               <th style="width:170px;">Status</th>
               <th style="width:220px;">Reason</th>
-              <th style="width:200px;">Last Rented</th>
               <th style="width:210px;">Action</th>
             </tr>
           </thead>
@@ -294,7 +293,6 @@
           <div class="inspect-label">Type</div><div id="inspect-unit-type">-</div>
           <div class="inspect-label">Description</div><div id="inspect-unit-description">-</div>
           <div class="inspect-label">Status</div><div id="inspect-unit-status">-</div>
-          <div class="inspect-label">Last Rented</div><div id="inspect-unit-last-rented">-</div>
         </div>
         <div id="inspect-form-empty" class="empty" style="display:none;"></div>
         <form id="inspect-form">
@@ -510,7 +508,6 @@
       const postInspectionsError = $("post-inspections-error");
       const postInspectionsSuccess = $("post-inspections-success");
 
-      let lastRentedByUnit = {};
       let returnedAtByUnit = {};
       let allInventoryRows = [];
       let returnedRows = [];
@@ -593,14 +590,6 @@
 
       function isDownStatus(value) {
         return normalizeStatus(value).startsWith("DOWN");
-      }
-
-      function formatLastRented(unitId) {
-        const value = lastRentedByUnit[unitId];
-        if (!value) return "Never";
-        const dt = new Date(value);
-        if (Number.isNaN(dt.getTime())) return "Never";
-        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
       }
 
       function mapReturnedAtByUnit(snapshot) {
@@ -1223,7 +1212,6 @@
           $("inspect-unit-type").textContent = row.asset?.type ?? "-";
           $("inspect-unit-description").textContent = row.asset?.description ?? "-";
           $("inspect-unit-status").textContent = row.status ?? "-";
-          $("inspect-unit-last-rented").textContent = formatLastRented(row.id);
           openModal("inspect-modal-backdrop");
           renderInspectForm();
         } catch (e) {
@@ -1533,7 +1521,6 @@
             <td>${escapeHtml(row.asset?.description ?? "-")}</td>
             <td>${escapeHtml(row.status ?? "-")}</td>
             <td>${escapeHtml(row.downReason ?? "-")}</td>
-            <td>${escapeHtml(formatLastRented(row.id))}</td>
             <td>
               <div class="action-buttons">
                 <button class="btn small js-down-complete" type="button">Complete</button>
@@ -1541,7 +1528,7 @@
               </div>
             </td>
           `;
-          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Reason", "Last Rented", "Action"]);
+          applyMobileLabels(tr, ["Unit Number", "Type", "Description", "Status", "Reason", "Action"]);
           tr.querySelector(".js-down-complete").addEventListener("click", () => {
             if (!row?.id) return;
             openCompleteModal(row);
@@ -1555,12 +1542,9 @@
 
       async function loadMaintenance() {
         setMsg(maintenanceError, "");
-        const [rows, reservationSnapshot] = await Promise.all([
-          api("/api/inventory"),
-          api("/api/reservations"),
-        ]);
+        const reservationSnapshot = await api("/api/reservations");
+        const rows = await api("/api/inventory");
         allInventoryRows = Array.isArray(rows) ? rows : [];
-        lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
         returnedAtByUnit = mapReturnedAtByUnit(reservationSnapshot);
         returnedRows = allInventoryRows.filter((row) => isReturnedStatus(row.status));
         downRows = allInventoryRows.filter((row) => isDownStatus(row.status));

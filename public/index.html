@@ -82,7 +82,6 @@
               <th>Description</th>
               <th style="width:130px;">Hours</th>
               <th style="width:160px;">Status</th>
-              <th style="width:190px;">Last Rented</th>
             </tr>
           </thead>
           <tbody id="inventory-body"></tbody>
@@ -100,7 +99,6 @@
       const filterType = $("inventory-filter-type");
       const filterStatus = $("inventory-filter-status");
 
-      let lastRentedByUnit = {};
       let inventoryRows = [];
 
       function setMsg(el, msg) {
@@ -142,14 +140,6 @@
           throw new Error(`Request failed (${res.status})`);
         }
         return data;
-      }
-
-      function formatLastRented(unitId) {
-        const value = lastRentedByUnit[unitId];
-        if (!value) return "Never";
-        const dt = new Date(value);
-        if (Number.isNaN(dt.getTime())) return "Never";
-        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
       }
 
       function formatHours(value) {
@@ -218,7 +208,14 @@
         inventoryEmpty.style.display = "none";
 
         const unitCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-        const sortedRows = [...rows].sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+        const sortedRows = [...rows].sort((a, b) => {
+          const aTime = new Date(a.createdAt || 0).getTime();
+          const bTime = new Date(b.createdAt || 0).getTime();
+          if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+            return aTime - bTime;
+          }
+          return unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? "");
+        });
 
         for (const r of sortedRows) {
           const tr = document.createElement("tr");
@@ -229,7 +226,6 @@
             <td>${asset?.description ?? "-"}</td>
             <td>${formatHours(r.hours)}</td>
             <td>${r.status ?? "-"}</td>
-            <td>${formatLastRented(r.id)}</td>
           `;
           inventoryBody.appendChild(tr);
         }
@@ -237,12 +233,8 @@
 
       async function loadInventory() {
         setMsg(inventoryError, "");
-        const [rows, reservationSnapshot] = await Promise.all([
-          api("/api/inventory"),
-          api("/api/reservations"),
-        ]);
+        const rows = await api("/api/inventory");
         inventoryRows = Array.isArray(rows) ? rows : [];
-        lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
         populateFilterOptions(inventoryRows);
         renderInventory();
       }

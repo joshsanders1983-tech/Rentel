@@ -420,7 +420,6 @@
                 <th>Description</th>
                 <th style="width:170px;">Hours</th>
                 <th style="width:160px;">Status</th>
-                <th style="width:190px;">Last Rented</th>
                 <th style="width:120px;">Actions</th>
               </tr>
             </thead>
@@ -690,7 +689,6 @@
       let maintenanceRules = [];
       let historyOrders = [];
       let historyServiceEvents = [];
-      let lastRentedByUnit = {};
       let editOriginalStatus = "";
       let confirmResolver = null;
       let promptResolver = null;
@@ -1360,14 +1358,6 @@
         select.appendChild(opt);
       }
 
-      function formatLastRented(unitId) {
-        const value = lastRentedByUnit[unitId];
-        if (!value) return "Never";
-        const dt = new Date(value);
-        if (Number.isNaN(dt.getTime())) return "Never";
-        return window.RentelDateTime.formatDisplayDateTimeInstant(dt);
-      }
-
       function formatHours(value) {
         if (typeof value !== "number" || !Number.isFinite(value)) return "";
         return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -1780,7 +1770,14 @@
         inventoryEmpty.style.display = "none";
 
         const unitCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-        const sortedRows = [...rows].sort((a, b) => unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? ""));
+        const sortedRows = [...rows].sort((a, b) => {
+          const aTime = new Date(a.createdAt || 0).getTime();
+          const bTime = new Date(b.createdAt || 0).getTime();
+          if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+            return aTime - bTime;
+          }
+          return unitCollator.compare(a.unitNumber ?? "", b.unitNumber ?? "");
+        });
 
         for (const r of sortedRows) {
           const tr = document.createElement("tr");
@@ -1792,7 +1789,6 @@
             <td>${a?.description ?? "-"}</td>
             <td>${formatHours(r.hours) || "-"}</td>
             <td>${statusLabel}</td>
-            <td>${formatLastRented(r.id)}</td>
             <td><button class="secondary js-edit" type="button">Edit</button></td>
           `;
           tr.querySelector(".js-edit").addEventListener("click", () => openEditModal(r));
@@ -1802,12 +1798,8 @@
 
       async function loadInventory() {
         const prevMaintenanceUnitIds = readMultiSelectValues(maintenanceRuleUnitIds);
-        const [rows, reservationSnapshot] = await Promise.all([
-          api("/api/inventory"),
-          api("/api/reservations"),
-        ]);
+        const rows = await api("/api/inventory");
         inventoryRows = Array.isArray(rows) ? rows : [];
-        lastRentedByUnit = (reservationSnapshot && reservationSnapshot.lastRentedByUnit) || {};
         renderInventory(inventoryRows);
         renderMaintenanceRuleUnitSelect(prevMaintenanceUnitIds);
         renderMaintenanceRules();

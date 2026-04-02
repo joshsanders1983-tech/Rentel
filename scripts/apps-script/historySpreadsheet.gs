@@ -10,6 +10,7 @@ const RENTEL_CONFIG_KEYS = {
   baseUrl: "RENTEL_BASE_URL",
   techUsername: "RENTEL_TECH_USERNAME",
   techPassword: "RENTEL_TECH_PASSWORD",
+  adminPassword: "RENTEL_ADMIN_PASSWORD",
 };
 
 /**
@@ -20,6 +21,7 @@ const RENTEL_DEFAULT_CONFIG = {
   baseUrl: "https://YOUR-RENDER-APP.onrender.com",
   techUsername: "YOUR_TECH_USERNAME",
   techPassword: "YOUR_TECH_PASSWORD",
+  adminPassword: "YOUR_ADMIN_PASSWORD",
 };
 
 const HISTORY_SHEETS = {
@@ -92,6 +94,26 @@ const HISTORY_SHEETS = {
     dateColumns: [1],
     numberColumns: [7, 8],
   },
+  orders: {
+    name: "Orders",
+    headers: [
+      "Order #",
+      "State",
+      "Customer",
+      "Address",
+      "Type",
+      "Qty",
+      "Unit(s)",
+      "On Rent",
+      "Off Rent",
+      "Scheduled Start",
+      "Scheduled End",
+      "Created",
+      "Reservation ID",
+    ],
+    dateColumns: [8, 9, 10, 11, 12],
+    numberColumns: [6],
+  },
 };
 
 function onOpen() {
@@ -109,14 +131,15 @@ function onOpen() {
 /**
  * Stores Render + tech login settings in Script Properties.
  */
-function setRentelConfig(baseUrl, techUsername, techPassword) {
+function setRentelConfig(baseUrl, techUsername, techPassword, adminPassword) {
   const cleanBaseUrl = normalizeBaseUrl_(baseUrl);
   const cleanUsername = toText_(techUsername);
   const cleanPassword = toText_(techPassword);
+  const cleanAdminPassword = toText_(adminPassword);
 
-  if (!cleanBaseUrl || !cleanUsername || !cleanPassword) {
+  if (!cleanBaseUrl || !cleanUsername || !cleanPassword || !cleanAdminPassword) {
     throw new Error(
-      "setRentelConfig requires baseUrl, techUsername, and techPassword.",
+      "setRentelConfig requires baseUrl, techUsername, techPassword, and adminPassword.",
     );
   }
 
@@ -124,6 +147,7 @@ function setRentelConfig(baseUrl, techUsername, techPassword) {
     [RENTEL_CONFIG_KEYS.baseUrl]: cleanBaseUrl,
     [RENTEL_CONFIG_KEYS.techUsername]: cleanUsername,
     [RENTEL_CONFIG_KEYS.techPassword]: cleanPassword,
+    [RENTEL_CONFIG_KEYS.adminPassword]: cleanAdminPassword,
   });
 }
 
@@ -153,10 +177,18 @@ function promptRentelConfig() {
   );
   if (passResp.getSelectedButton() !== ui.Button.OK) return;
 
+  const adminResp = ui.prompt(
+    "Rentel Config",
+    "Enter your Rentel admin password (for Order History):",
+    ui.ButtonSet.OK_CANCEL,
+  );
+  if (adminResp.getSelectedButton() !== ui.Button.OK) return;
+
   setRentelConfig(
     baseUrlResp.getResponseText(),
     userResp.getResponseText(),
     passResp.getResponseText(),
+    adminResp.getResponseText(),
   );
   SpreadsheetApp.getActive().toast("Rentel config saved.", "Rentel History", 5);
 }
@@ -169,19 +201,22 @@ function saveRentelConfigFromScript() {
   const baseUrl = toText_(cfg.baseUrl);
   const techUsername = toText_(cfg.techUsername);
   const techPassword = toText_(cfg.techPassword);
+  const adminPassword = toText_(cfg.adminPassword);
   if (
     !baseUrl ||
     !techUsername ||
     !techPassword ||
+    !adminPassword ||
     isPlaceholderValue_(baseUrl) ||
     isPlaceholderValue_(techUsername) ||
-    isPlaceholderValue_(techPassword)
+    isPlaceholderValue_(techPassword) ||
+    isPlaceholderValue_(adminPassword)
   ) {
     throw new Error(
       "Update RENTEL_DEFAULT_CONFIG first, then run Save Config From Script again.",
     );
   }
-  setRentelConfig(baseUrl, techUsername, techPassword);
+  setRentelConfig(baseUrl, techUsername, techPassword, adminPassword);
   SpreadsheetApp.getActive().toast("Config saved from script constants.", "Rentel History", 5);
 }
 
@@ -193,6 +228,7 @@ function setRentelConfigFromCodeSample() {
     "https://YOUR-RENDER-APP.onrender.com",
     "YOUR_TECH_USERNAME",
     "YOUR_TECH_PASSWORD",
+    "YOUR_ADMIN_PASSWORD",
   );
 }
 
@@ -215,12 +251,7 @@ function syncHistoryFromRender() {
 
   const config = getRentelConfig_();
   const sessionToken = loginTech_(config);
-
-  const inventoryRows = fetchJson_(
-    `${config.baseUrl}/api/inventory`,
-    sessionToken,
-  );
-  const inventory = Array.isArray(inventoryRows) ? inventoryRows : [];
+  const adminCookie = loginAdmin_(config);
 
   const postRentalPayload = fetchJson_(
     `${config.baseUrl}/api/post-rental-inspections`,
@@ -228,22 +259,29 @@ function syncHistoryFromRender() {
   );
   const postRentalEntries = Array.isArray(postRentalPayload) ? postRentalPayload : [];
 
+  const adminHistory = fetchAdminHistory_(config.baseUrl, adminCookie);
+  const serviceEvents = Array.isArray(adminHistory && adminHistory.serviceEvents)
+    ? adminHistory.serviceEvents
+    : [];
+  const orders = Array.isArray(adminHistory && adminHistory.orders) ? adminHistory.orders : [];
+
+  const inventoryRows = fetchJson_(
+    `${config.baseUrl}/api/inventory`,
+    sessionToken,
+  );
+  const inventory = Array.isArray(inventoryRows) ? inventoryRows : [];
+
   const repairHistoryPayloads = fetchUnitHistoryBatch_(
     config.baseUrl,
     sessionToken,
     inventory,
     "repair-history",
   );
-  const serviceHistoryPayloads = fetchUnitHistoryBatch_(
-    config.baseUrl,
-    sessionToken,
-    inventory,
-    "service-history",
-  );
 
   const postRentalRows = buildPostRentalRows_(postRentalEntries);
-  const repairAndDamage = buildRepairAndDamageRows_(repairHistoryPayloads);
-  const serviceRows = buildServiceRows_(serviceHistoryPayloads);
+  const repairAndDamage = buildRepairAndDamageRows_(repairHistoryPayloads, serviceEvents);
+  const serviceRows = buildServiceRowsFromAdmin_(serviceEvents);
+  const orderRows = buildOrderRows_(orders);
 
   writeSheetRows_(
     ss,
@@ -253,10 +291,11 @@ function syncHistoryFromRender() {
   writeSheetRows_(ss, HISTORY_SHEETS.damages, repairAndDamage.damages);
   writeSheetRows_(ss, HISTORY_SHEETS.service, serviceRows);
   writeSheetRows_(ss, HISTORY_SHEETS.repair, repairAndDamage.repair);
+  writeSheetRows_(ss, HISTORY_SHEETS.orders, orderRows);
 
   const seconds = Math.round((Date.now() - startedAt.getTime()) / 1000);
   SpreadsheetApp.getActive().toast(
-    `Sync complete in ${seconds}s | Post Rental: ${postRentalRows.length}, Damages: ${repairAndDamage.damages.length}, Service: ${serviceRows.length}, Repair: ${repairAndDamage.repair.length}`,
+    `Sync complete in ${seconds}s | Post Rental: ${postRentalRows.length}, Damages: ${repairAndDamage.damages.length}, Service: ${serviceRows.length}, Repair: ${repairAndDamage.repair.length}, Orders: ${orderRows.length}`,
     "Rentel History",
     8,
   );
@@ -355,8 +394,8 @@ function buildPostRentalRows_(entries) {
   return sortByDateDesc_(rows, 0);
 }
 
-function buildRepairAndDamageRows_(historyPayloads) {
-  const repair = [];
+function buildRepairAndDamageRows_(historyPayloads, serviceEvents) {
+  const repair = buildRepairRowsFromAdmin_(serviceEvents);
   const damages = [];
 
   historyPayloads.forEach((payload) => {
@@ -382,9 +421,6 @@ function buildRepairAndDamageRows_(historyPayloads) {
       if (isDamageInspectionDownEntry_(entry)) {
         damages.push(row);
       }
-      if (!isInspectionDrivenRepairEntry_(entry)) {
-        repair.push(row);
-      }
     });
   });
 
@@ -394,28 +430,74 @@ function buildRepairAndDamageRows_(historyPayloads) {
   };
 }
 
-function buildServiceRows_(historyPayloads) {
+function buildServiceRowsFromAdmin_(serviceEvents) {
   const rows = [];
-  historyPayloads.forEach((payload) => {
-    const entries = Array.isArray(payload && payload.entries) ? payload.entries : [];
-    const unitNumber = toText_(payload && payload.unitNumber);
-    const assetType = toText_(payload && payload.assetType);
-    const inventoryId = toText_(payload && payload.inventoryId);
-
-    entries.forEach((entry) => {
-      rows.push([
-        toDateOrBlank_(entry.createdAt),
-        unitNumber,
-        assetType,
-        toText_(entry.details),
-        toText_(entry.techName),
-        toNumberOrBlank_(entry.repairHours),
-        inventoryId,
-        toText_(entry.id),
-      ]);
-    });
+  const events = Array.isArray(serviceEvents) ? serviceEvents : [];
+  events.forEach((entry) => {
+    if (toText_(entry && entry.source).toUpperCase() !== "SERVICE") return;
+    rows.push([
+      toDateOrBlank_(entry.createdAt),
+      toText_(entry.unitNumber),
+      toText_(entry.assetType),
+      toText_(entry.details),
+      toText_(entry.techName),
+      toNumberOrBlank_(entry.repairHours),
+      toText_(entry.inventoryId),
+      toText_(entry.id),
+    ]);
   });
   return sortByDateDesc_(rows, 0);
+}
+
+function buildRepairRowsFromAdmin_(serviceEvents) {
+  const rows = [];
+  const events = Array.isArray(serviceEvents) ? serviceEvents : [];
+  events.forEach((entry) => {
+    if (toText_(entry && entry.source).toUpperCase() !== "REPAIR") return;
+    rows.push([
+      toDateOrBlank_(entry.createdAt),
+      toText_(entry.unitNumber),
+      toText_(entry.assetType),
+      toText_(entry.action),
+      toText_(entry.details),
+      toText_(entry.techName),
+      toNumberOrBlank_(entry.repairHours),
+      "",
+      toText_(entry.inventoryId),
+      toText_(entry.id),
+    ]);
+  });
+  return sortByDateDesc_(rows, 0);
+}
+
+function buildOrderRows_(orders) {
+  const rows = [];
+  const list = Array.isArray(orders) ? orders : [];
+  list.forEach((entry) => {
+    const assignedUnits = Array.isArray(entry && entry.assignedUnits)
+      ? entry.assignedUnits
+      : [];
+    const unitNumbers = assignedUnits
+      .map((u) => toText_(u && u.unitNumber))
+      .filter((v) => v !== "")
+      .join(", ");
+    rows.push([
+      toText_(entry.orderNumber),
+      formatOrderState_(entry),
+      toText_(entry.customerName),
+      toText_(entry.address),
+      toText_(entry.type),
+      toNumberOrBlank_(entry.quantity),
+      unitNumbers,
+      toDateOrBlank_(entry.activatedAt),
+      toDateOrBlank_(entry.returnedAt),
+      toDateOrBlank_(combineDateTimeParts_(entry.startDate, entry.startTime)),
+      toDateOrBlank_(combineDateTimeParts_(entry.endDate, entry.endTime)),
+      toDateOrBlank_(entry.createdAt),
+      toText_(entry.id),
+    ]);
+  });
+  return sortByDateDesc_(rows, 11);
 }
 
 function fetchUnitHistoryBatch_(baseUrl, sessionToken, inventoryRows, endpointSuffix) {
@@ -482,6 +564,50 @@ function loginTech_(config) {
   return token;
 }
 
+function loginAdmin_(config) {
+  const url = `${config.baseUrl}/api/admin/login`;
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      password: config.adminPassword,
+    }),
+    muteHttpExceptions: true,
+    followRedirects: false,
+  });
+
+  const code = response.getResponseCode();
+  const text = response.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error(`Admin login failed [${code}]: ${text || "No response body"}`);
+  }
+
+  const headers = response.getAllHeaders ? response.getAllHeaders() : response.getHeaders();
+  const setCookie = getHeaderValueCaseInsensitive_(headers, "set-cookie");
+  const cookie = extractCookieByName_(setCookie, "rentel_admin_session");
+  if (!cookie) {
+    throw new Error("Admin login succeeded but admin session cookie was not returned.");
+  }
+  return cookie;
+}
+
+function fetchAdminHistory_(baseUrl, adminCookieHeader) {
+  const response = UrlFetchApp.fetch(`${baseUrl}/api/admin/history`, {
+    method: "get",
+    headers: {
+      Cookie: adminCookieHeader,
+      Accept: "application/json",
+    },
+    muteHttpExceptions: true,
+  });
+  const code = response.getResponseCode();
+  const text = response.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error(`GET /api/admin/history failed [${code}]: ${text || "No response body"}`);
+  }
+  return safeParseJson_(text);
+}
+
 function fetchJson_(url, sessionToken) {
   const response = UrlFetchApp.fetch(url, {
     method: "get",
@@ -508,28 +634,33 @@ function getRentelConfig_() {
   let baseUrl = normalizeBaseUrl_(props.getProperty(RENTEL_CONFIG_KEYS.baseUrl));
   let techUsername = toText_(props.getProperty(RENTEL_CONFIG_KEYS.techUsername));
   let techPassword = toText_(props.getProperty(RENTEL_CONFIG_KEYS.techPassword));
+  let adminPassword = toText_(props.getProperty(RENTEL_CONFIG_KEYS.adminPassword));
 
-  if (!baseUrl || !techUsername || !techPassword) {
+  if (!baseUrl || !techUsername || !techPassword || !adminPassword) {
     const fallbackBase = toText_(RENTEL_DEFAULT_CONFIG.baseUrl);
     const fallbackUser = toText_(RENTEL_DEFAULT_CONFIG.techUsername);
     const fallbackPass = toText_(RENTEL_DEFAULT_CONFIG.techPassword);
+    const fallbackAdminPass = toText_(RENTEL_DEFAULT_CONFIG.adminPassword);
     if (
       fallbackBase &&
       fallbackUser &&
       fallbackPass &&
+      fallbackAdminPass &&
       !isPlaceholderValue_(fallbackBase) &&
       !isPlaceholderValue_(fallbackUser) &&
-      !isPlaceholderValue_(fallbackPass)
+      !isPlaceholderValue_(fallbackPass) &&
+      !isPlaceholderValue_(fallbackAdminPass)
     ) {
       baseUrl = normalizeBaseUrl_(fallbackBase);
       techUsername = fallbackUser;
       techPassword = fallbackPass;
+      adminPassword = fallbackAdminPass;
     }
   }
 
-  if (!baseUrl || !techUsername || !techPassword) {
+  if (!baseUrl || !techUsername || !techPassword || !adminPassword) {
     throw new Error(
-      "Missing config. Update RENTEL_DEFAULT_CONFIG at the top of the script, or run Prompt Config / setRentelConfig(...), then try again.",
+      "Missing config. Update RENTEL_DEFAULT_CONFIG at the top of the script (including adminPassword), or run Prompt Config / setRentelConfig(...), then try again.",
     );
   }
 
@@ -537,6 +668,7 @@ function getRentelConfig_() {
     baseUrl: baseUrl,
     techUsername: techUsername,
     techPassword: techPassword,
+    adminPassword: adminPassword,
   };
 }
 
@@ -600,6 +732,51 @@ function sortByDateDesc_(rows, dateIndex) {
     const bTime = bVal instanceof Date ? bVal.getTime() : 0;
     return bTime - aTime;
   });
+}
+
+function formatOrderState_(entry) {
+  const value = toText_(entry && entry.listKind).toUpperCase();
+  if (value === "RESERVATION") return "Reservation";
+  if (value === "ON_RENT") return "On Rent";
+  if (value === "POTENTIAL") return "Potential";
+  if (value === "RETURNED") {
+    const assigned = Array.isArray(entry && entry.assignedUnits) ? entry.assignedUnits : [];
+    return assigned.length === 0 ? "Completed" : "Returned";
+  }
+  return toText_(entry && entry.listKind);
+}
+
+function combineDateTimeParts_(dateText, timeText) {
+  const d = toText_(dateText);
+  const t = toText_(timeText);
+  if (!d && !t) return "";
+  if (d && t) return `${d}T${t}:00`;
+  return `${d} ${t}`.trim();
+}
+
+function getHeaderValueCaseInsensitive_(headers, key) {
+  if (!headers || typeof headers !== "object") return "";
+  const target = String(key || "").toLowerCase();
+  const keys = Object.keys(headers);
+  for (let i = 0; i < keys.length; i++) {
+    const name = String(keys[i] || "");
+    if (name.toLowerCase() !== target) continue;
+    return headers[name];
+  }
+  return "";
+}
+
+function extractCookieByName_(setCookieHeader, cookieName) {
+  const name = toText_(cookieName);
+  if (!name) return "";
+  const raw = Array.isArray(setCookieHeader)
+    ? setCookieHeader.join(",")
+    : String(setCookieHeader || "");
+  if (!raw) return "";
+
+  const cookieRegex = new RegExp(`(?:^|,\\s*)(${name}=[^;\\s,]+)`, "i");
+  const match = raw.match(cookieRegex);
+  return match && match[1] ? match[1] : "";
 }
 
 /**

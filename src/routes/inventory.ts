@@ -334,6 +334,9 @@ apiInventoryRouter.patch("/:id", requireAdmin, async (req, res) => {
         unitNumber: nextUnitNumber,
         ...(parsedHours.hasValue ? { hours: parsedHours.value } : {}),
         status,
+        ...(isAvailableStatus(status) && !isAvailableStatus(existing.status)
+          ? { createdAt: new Date() }
+          : {}),
         downReason: movingToDown
           ? parsedDownReason.hasValue
             ? parsedDownReason.value
@@ -549,6 +552,7 @@ apiInventoryRouter.post("/:id/complete", requireTech, async (req, res) => {
       where: { id: existing.id },
       data: {
         status: "Available",
+        createdAt: completedAt,
         hours: repairHours,
         downReason: null,
         inspectionRequired: false,
