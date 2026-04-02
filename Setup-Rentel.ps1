@@ -51,7 +51,9 @@ function Set-EnvValue {
 
 function Test-NeedsDatabaseUrl([string]$url) {
   if ([string]::IsNullOrWhiteSpace($url)) { return $true }
+  if ($url -match "\[.+\]") { return $true }
   if ($url -match "USER:PASSWORD") { return $true }
+  if ($url -match "PROJECT-REF|REGION|YOUR-PASSWORD") { return $true }
   if ($url -match "@HOST:5432") { return $true }
   if ($url -notmatch "^(postgresql|postgres)://") { return $true }
   return $false
@@ -83,7 +85,7 @@ if (-not (Test-Path $envFile)) {
 
 $dbUrl = Get-EnvValue $envFile "DATABASE_URL"
 if (Test-NeedsDatabaseUrl $dbUrl) {
-  Write-Title "Step 1 — Create a Supabase project (free tier is fine)"
+  Write-Title "Step 1 - Create a Supabase project (free tier is fine)"
   Write-Host "  I cannot log in for you. Do this once in your browser:"
   Write-Host ""
   Write-Host "  a) Go to https://supabase.com/dashboard"
@@ -95,7 +97,7 @@ if (Test-NeedsDatabaseUrl $dbUrl) {
     Start-Process "https://supabase.com/dashboard"
   }
 
-  Write-Title "Step 2 — Session pooler connection string (IPv4-safe for Render)"
+  Write-Title "Step 2 - Session pooler connection string (IPv4-safe for Render)"
   Write-Host "  In Supabase: open your project -> **Connect** -> **Connection string** -> **Session pooler**."
   Write-Host "  Host should look like aws-0-<region>.pooler.supabase.com and port **5432** (not db.*.supabase.co only)."
   Write-Host ""
@@ -113,7 +115,7 @@ if (Test-NeedsDatabaseUrl $dbUrl) {
 
 $adminPw = Get-EnvValue $envFile "ADMIN_PASSWORD"
 if ($adminPw -eq "change-me" -or [string]::IsNullOrWhiteSpace($adminPw)) {
-  Write-Title "Step 3 — Admin password (optional)"
+  Write-Title "Step 3 - Admin password (optional)"
   $newPw = Read-Host "Type a password for the Rentel admin login (Enter to keep 'change-me' for local dev only)"
   if (-not [string]::IsNullOrWhiteSpace($newPw)) {
     Set-EnvValue $envFile "ADMIN_PASSWORD" $newPw
@@ -121,7 +123,7 @@ if ($adminPw -eq "change-me" -or [string]::IsNullOrWhiteSpace($adminPw)) {
   }
 }
 
-Write-Title "Step 4 — Install packages and apply database schema"
+Write-Title "Step 4 - Install packages and apply database schema"
 Push-Location $backend
 try {
   Write-Host "Running npm install..."

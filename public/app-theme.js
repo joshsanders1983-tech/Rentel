@@ -47,6 +47,10 @@
     const style = document.createElement("style");
     style.id = MOBILE_STYLE_ID;
     style.textContent = `
+      img, svg {
+        max-width: 100%;
+        height: auto;
+      }
       .top-nav .nav-link {
         align-items: center;
         justify-content: center;
@@ -58,7 +62,66 @@
         -webkit-overflow-scrolling: touch;
       }
       .table-scroll > table {
-        min-width: 640px;
+        min-width: 620px;
+      }
+      .table-scroll > table.mobile-cards-table {
+        min-width: 0;
+      }
+      @media (max-width: 1024px) {
+        .layout-row,
+        .techs-two-col {
+          grid-template-columns: 1fr !important;
+        }
+        .grid-4 {
+          grid-template-columns: repeat(2, minmax(150px, 1fr)) !important;
+        }
+        .grid-2 {
+          grid-template-columns: 1fr !important;
+        }
+        .card-tech-entry {
+          width: 100% !important;
+          max-width: none !important;
+        }
+      }
+      @media (max-width: 760px) {
+        main {
+          padding: 12px !important;
+        }
+        header {
+          padding: 12px 14px !important;
+        }
+        .card {
+          padding: 12px !important;
+        }
+        .field-grid,
+        .grid,
+        .grid-2,
+        .grid-4,
+        .inspect-grid,
+        .layout-row {
+          grid-template-columns: 1fr !important;
+        }
+        .btn,
+        button,
+        .nav-link,
+        input,
+        select,
+        textarea {
+          min-height: 42px !important;
+          font-size: 16px !important;
+        }
+        .modal {
+          width: 100% !important;
+          max-width: 100% !important;
+          max-height: 92vh !important;
+        }
+        .modal-actions {
+          flex-wrap: wrap !important;
+        }
+        .modal-actions .btn,
+        .modal-actions button {
+          flex: 1 1 140px;
+        }
       }
       @media (max-width: 560px) {
         .top-nav {
@@ -69,8 +132,13 @@
         .top-nav .nav-link-admin {
           margin-left: 0;
         }
-        .btn {
-          min-height: 40px;
+        .top-nav .nav-link {
+          min-width: 88px;
+          padding-left: 10px;
+          padding-right: 10px;
+        }
+        .table-scroll > table {
+          min-width: 520px;
         }
       }
     `;

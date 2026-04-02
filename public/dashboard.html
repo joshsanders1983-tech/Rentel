@@ -157,6 +157,8 @@
               <tr>
                 <th>Customer Name</th>
                 <th>Address</th>
+                <th>Unit #</th>
+                <th>Type(s)</th>
                 <th>Start Date/Time</th>
               </tr>
             </thead>
@@ -180,6 +182,8 @@
               <tr>
                 <th>Customer Name</th>
                 <th>Address</th>
+                <th>Unit #</th>
+                <th>Type(s)</th>
                 <th>End Date/Time</th>
               </tr>
             </thead>
@@ -284,6 +288,22 @@
         return assignedCount < qty;
       }
 
+      function assignedUnitNumbers(entry) {
+        if (!entry || !Array.isArray(entry.assignedUnits) || entry.assignedUnits.length === 0) return "-";
+        return entry.assignedUnits.map((u) => u.unitNumber || "-").join(", ");
+      }
+
+      function assignedTypes(entry) {
+        if (!entry || !Array.isArray(entry.assignedUnits) || entry.assignedUnits.length === 0) return "-";
+        return Array.from(
+          new Set(
+            entry.assignedUnits
+              .map((u) => String(u && u.type ? u.type : "").trim())
+              .filter(Boolean),
+          ),
+        ).join(", ") || "-";
+      }
+
       function scheduleTimestamp(dateText, timeText) {
         if (!dateText || !timeText) return Number.MAX_SAFE_INTEGER;
         const dt = new Date(`${dateText}T${timeText}:00`);
@@ -354,6 +374,8 @@
           tr.innerHTML = `
             <td>${e.customerName}</td>
             <td>${e.address}</td>
+            <td>${assignedUnitNumbers(e)}</td>
+            <td>${assignedTypes(e)}</td>
             <td>${scheduledAt}</td>
           `;
           body.appendChild(tr);

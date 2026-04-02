@@ -93,6 +93,15 @@ function normalizeDateValue(value: Date | string): Date {
 }
 
 function readTechSessionToken(req: Request): string {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string") {
+    const trimmed = authHeader.trim();
+    if (trimmed.toLowerCase().startsWith("bearer ")) {
+      const bearerToken = trimmed.slice(7).trim();
+      if (bearerToken) return bearerToken;
+    }
+  }
+
   const cookies = parseCookies(req.headers.cookie);
   return cookies[TECH_COOKIE_NAME] || "";
 }

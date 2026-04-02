@@ -43,7 +43,14 @@ apiTechAuthRouter.post("/login", async (req, res) => {
 
   const token = createTechSession(identity);
   setTechSessionCookie(res, token);
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    sessionToken: token,
+    technicianId: identity.technicianId,
+    techName: identity.techName,
+    username: identity.username,
+    tokenType: "Bearer",
+  });
 });
 
 apiTechAuthRouter.post("/logout", (req, res) => {
