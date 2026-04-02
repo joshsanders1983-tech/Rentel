@@ -105,6 +105,11 @@
     const style = document.createElement("style");
     style.id = MOBILE_STYLE_ID;
     style.textContent = `
+      .top-nav .nav-link {
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
       .table-scroll {
         width: 100%;
         overflow-x: auto;
