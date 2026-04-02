@@ -784,7 +784,7 @@
           const entries = ids.map((id) => reservationById(id)).filter(Boolean);
           const summary = entries.map((r) => `${r.customerName} -> ${assignedUnitNumbers(r)}`).join("\n");
           const confirmed = await openConfirmModal({
-            title: "Confirm Batch Activation",
+            title: "Confirm Reservation Activation",
             text: `Confirm placing selected entries On Rent?\n\n${summary}`,
             confirmLabel: "Yes",
             cancelLabel: "No",

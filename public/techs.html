@@ -147,7 +147,9 @@
               <button class="btn warn" id="post-inspections-offload" type="button">Offload to Spreadsheet</button>
             </div>
           </div>
-          <div id="post-inspections-empty" class="empty" style="display:none;">No post-rental inspection entries found.</div>
+          <div id="post-inspections-empty" class="empty" style="display:none;">
+            No flagged post-rental inspection entries found. Only Needs attention or Damaged results are listed.
+          </div>
           <table class="mobile-cards-table">
             <thead>
               <tr>
@@ -941,7 +943,15 @@
       }
 
       async function refreshMaintenanceAndDueTasks() {
-        await Promise.all([loadMaintenance(), loadDueMaintenanceTasks()]);
+        const tasks = [loadMaintenance(), loadDueMaintenanceTasks()];
+        if (postInspectionsOpen) {
+          tasks.push(
+            loadPostRentalInspections().catch((e) =>
+              setMsg(postInspectionsError, "Failed to refresh post-rental inspections: " + String(e.message || e)),
+            ),
+          );
+        }
+        await Promise.all(tasks);
       }
 
       function renderInspectionHistoryRows(entries) {
