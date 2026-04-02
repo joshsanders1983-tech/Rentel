@@ -131,13 +131,16 @@ export async function getRepairHistoryEntries(
       take: limit,
     });
     return rows.map((row) => ({
+      // `laborHours` may not exist on older generated Prisma clients.
+      // Keep runtime compatibility by reading it from the row dynamically.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      laborHours: (row as { laborHours?: number | null }).laborHours ?? null,
       id: row.id,
       inventoryId: row.inventoryId,
       action: row.action as RepairHistoryAction,
       details: row.details ?? null,
       techName: row.techName ?? null,
       repairHours: row.repairHours ?? null,
-      laborHours: row.laborHours ?? null,
       createdAt: row.createdAt.toISOString(),
     }));
   } catch (err) {
