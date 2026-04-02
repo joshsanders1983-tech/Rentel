@@ -176,12 +176,8 @@
 
       <div class="techs-two-col">
         <div class="card card-half techs-side-card card-tech-entry">
-          <h2>Tech Entry</h2>
+          <h2>Manually Down a Unit</h2>
           <div class="field-grid">
-            <div>
-              <label class="field-label" for="manual-down-tech-name">Tech Name</label>
-              <input class="field-input" id="manual-down-tech-name" type="text" placeholder="e.g. Alex" />
-            </div>
             <div>
               <label class="field-label" for="manual-down-unit">Unit #</label>
               <input class="field-input" id="manual-down-unit" type="text" />
@@ -198,7 +194,6 @@
           <div class="row buttons" style="margin-top:10px;">
             <button class="btn warn" id="manual-down-submit" type="button">Down Unit</button>
             <button class="btn secondary" id="manual-down-cancel" type="button">Cancel</button>
-            <button class="btn secondary" id="manual-down-delete-tech" type="button">Delete Tech</button>
           </div>
           <div id="manual-down-error" class="msg" style="display:none;"></div>
           <div id="manual-down-success" class="msg ok" style="display:none;"></div>
@@ -460,13 +455,11 @@
       const damageGalleryInput = $("damage-gallery-input");
       const damageDeviceInput = $("damage-device-input");
       const damagePhotoSummary = $("damage-photo-summary");
-      const manualDownTechName = $("manual-down-tech-name");
       const manualDownUnit = $("manual-down-unit");
       const manualDownHours = $("manual-down-hours");
       const manualDownReason = $("manual-down-reason");
       const manualDownSubmit = $("manual-down-submit");
       const manualDownCancel = $("manual-down-cancel");
-      const manualDownDeleteTech = $("manual-down-delete-tech");
       const manualDownError = $("manual-down-error");
       const manualDownSuccess = $("manual-down-success");
       const techLogout = $("tech-logout");
@@ -485,7 +478,6 @@
       let damagePhotoFiles = [];
       let dueMaintenanceTasks = [];
       let dueTechnicianDirectory = [];
-      let defaultTechName = "";
       const INSPECTION_OPTION_DEFS = [
         { key: "ok", label: "Ok" },
         { key: "needsAttention", label: "Needs attention" },
@@ -929,7 +921,6 @@
       }
 
       function resetManualDownForm() {
-        manualDownTechName.value = defaultTechName || "";
         manualDownUnit.value = "";
         manualDownHours.value = "";
         manualDownReason.value = "";
@@ -1400,11 +1391,7 @@
           String(session.username || "").trim() ||
           "-";
         shopTechDisplayName = displayName;
-        defaultTechName = displayName === "-" ? "" : displayName;
         techSessionName.textContent = `Signed in as ${displayName}`;
-        if (manualDownTechName) {
-          manualDownTechName.value = defaultTechName;
-        }
       }
 
       function addDamageFiles(fileList) {
@@ -1421,7 +1408,8 @@
       }
 
       async function submitManualDown() {
-        const techName = manualDownTechName.value.trim();
+        const techName =
+          shopTechDisplayName && shopTechDisplayName !== "-" ? shopTechDisplayName : "";
         const unitNumber = manualDownUnit.value.trim();
         const hoursText = manualDownHours.value.trim();
         const reason = manualDownReason.value.trim();
@@ -1685,9 +1673,6 @@
         );
       });
       manualDownCancel.addEventListener("click", resetManualDownForm);
-      manualDownDeleteTech.addEventListener("click", () => {
-        manualDownTechName.value = "";
-      });
       unitHistoryView.addEventListener("click", () => {
         viewUnitHistoryFromCard().catch((e) =>
           setMsg(unitHistoryError, "Failed to load unit history: " + String(e.message || e)),
