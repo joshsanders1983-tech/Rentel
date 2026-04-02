@@ -190,7 +190,7 @@ export async function getReservationsSnapshot() {
       orderBy: { listEnteredAt: "desc" },
     }),
     prisma.reservationEntry.findMany({
-      where: { listKind: "RETURNED" },
+      where: { listKind: "RETURNED", quantity: { gt: 0 } },
       orderBy: { listEnteredAt: "desc" },
     }),
     prisma.reservationEntry.findMany({
@@ -431,7 +431,7 @@ export async function endOnRentBatch(id: string, returnedAtIso: string) {
 export async function restoreReturnedOnRentBatch(id: string) {
   return prisma.$transaction(async (tx) => {
     const target = await tx.reservationEntry.findFirst({
-      where: { id, listKind: "RETURNED" },
+      where: { id, listKind: "RETURNED", quantity: { gt: 0 } },
     });
     if (!target) return null;
 
@@ -442,7 +442,7 @@ export async function restoreReturnedOnRentBatch(id: string) {
     });
 
     const allReturned = await tx.reservationEntry.findMany({
-      where: { listKind: "RETURNED" },
+      where: { listKind: "RETURNED", quantity: { gt: 0 } },
       orderBy: { listEnteredAt: "desc" },
     });
 
@@ -481,7 +481,7 @@ export async function removeReturnedOnRentUnit(unitId: string) {
   if (!normalizedUnitId) return false;
 
   const rows = await prisma.reservationEntry.findMany({
-    where: { listKind: "RETURNED" },
+    where: { listKind: "RETURNED", quantity: { gt: 0 } },
   });
 
   let changed = false;
@@ -494,7 +494,13 @@ export async function removeReturnedOnRentUnit(unitId: string) {
     changed = true;
     const remaining = units.filter((u) => u.unitId !== normalizedUnitId);
     if (remaining.length === 0) {
-      await prisma.reservationEntry.delete({ where: { id: row.id } });
+      await prisma.reservationEntry.update({
+        where: { id: row.id },
+        data: {
+          assignedUnits: [] as unknown as Prisma.InputJsonValue,
+          quantity: 0,
+        },
+      });
     } else {
       await prisma.reservationEntry.update({
         where: { id: row.id },

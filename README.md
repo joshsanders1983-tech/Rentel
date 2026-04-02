@@ -65,6 +65,25 @@ Or double-click **`Launch-Rentel-Dev.cmd`** in the repo root.
 - Tech-authenticated shop workflow (`/techs`)
 - Admin-managed technician accounts (Tech Entry)
 - Repair history tracking tied to signed-in technician name
+- Shop "Post Rental Inspections" queue with manual Google Sheets offload
+
+## Post Rental Inspections Offload
+
+On the Shop page, use the **Post Rental Inspections** button to open the queue.
+Only inspection items that were selected as anything other than **Ok** or **N/A**
+(for example, **Needs attention** or **Damaged**) are added to this queue.
+
+Use **Offload to Spreadsheet** to append queued rows to your Google Sheet and
+clear them from the app queue:
+
+- Spreadsheet: [Post Rental Inspections Sheet](https://docs.google.com/spreadsheets/d/1amsUbJfgmT6b_A0CSym9BOpQlsx8vTFuoX1zgOeqPw4/edit?gid=0#gid=0)
+- Required `.env` values:
+  - `GOOGLE_SHEETS_CLIENT_EMAIL`
+  - `GOOGLE_SHEETS_PRIVATE_KEY`
+  - optional `POST_RENTAL_INSPECTIONS_SHEET_ID`
+  - optional `POST_RENTAL_INSPECTIONS_SHEET_GID` (defaults to `0`)
+
+Share the spreadsheet with the service account email as **Editor**.
 
 ## Default Access
 

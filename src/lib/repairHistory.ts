@@ -13,6 +13,33 @@ export type RepairHistoryRow = {
   createdAt: string;
 };
 
+export function isInspectionDerivedRepairHistoryEntry(input: {
+  action: string | null | undefined;
+  details: string | null | undefined;
+}): boolean {
+  const action = String(input.action ?? "").trim().toUpperCase();
+  const details = String(input.details ?? "").trim();
+  if (!details) return false;
+
+  if (
+    action === "COMPLETE" &&
+    /^inspection completed and unit returned to available\.?$/i.test(details)
+  ) {
+    return true;
+  }
+
+  if (
+    action === "DOWN" &&
+    (/(^|[|\n])\s*Damaged\s*:/i.test(details) ||
+      /(^|[|\n])\s*Needs attention\s*:/i.test(details) ||
+      /^inspection result moved this unit to down\.?$/i.test(details))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function collectErrorText(error: unknown): string {
   const parts: string[] = [];
   let e: unknown = error;

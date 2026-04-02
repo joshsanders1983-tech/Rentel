@@ -155,6 +155,26 @@ model InspectionSubmissionItem {
   @@index([formItemId])
 }
 
+/// Queue of post-rental inspection items that need review/export to spreadsheet.
+model PostRentalInspection {
+  id                   String   @id @default(cuid())
+  inspectionSubmissionId String @unique
+  inventoryId          String
+  unitNumberSnapshot   String
+  assetTypeSnapshot    String?
+  assetDescriptionSnapshot String?
+  techNameSnapshot     String?
+  submittedAt          DateTime
+  issueDescription     String?
+  damageDescription    String?
+  damagePhotosJson     Json
+  flaggedItemsJson     Json
+  createdAt            DateTime @default(now())
+
+  @@index([submittedAt])
+  @@index([createdAt])
+}
+
 /// Global inspection form settings managed from Admin.
 model InspectionConfig {
   id                    String   @id @default("default")
@@ -232,10 +252,13 @@ model ReservationEntry {
 
 /// Singleton app-level branding/theme settings.
 model AppSettings {
-  id        String   @id @default("default")
-  theme     String   @default("dark")
-  logoMime  String?
-  logoBytes Bytes?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                       String   @id @default("default")
+  theme                    String   @default("dark")
+  logoMime                 String?
+  logoBytes                Bytes?
+  historyLocationName      String?
+  historyLocationLatitude  Float?
+  historyLocationLongitude Float?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }

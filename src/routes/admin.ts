@@ -8,12 +8,16 @@ import {
   verifyAdminPassword,
 } from "../lib/adminAuth.js";
 import { prisma } from "../lib/prisma.js";
+import { isInspectionDerivedRepairHistoryEntry } from "../lib/repairHistory.js";
 
 export const apiAdminRouter = Router();
 
 type SettingsRow = {
   theme: string;
   logoMime: string | null;
+  historyLocationName: string | null;
+  historyLocationLatitude: number | null;
+  historyLocationLongitude: number | null;
 };
 
 type HistoryAssignedUnit = {
@@ -45,9 +49,33 @@ function normalizeTheme(input: unknown): "dark" | "light" | null {
   return null;
 }
 
+function normalizeLocationCoordinate(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number,
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (value === null || value === undefined || value === "") {
+    return { ok: true, value: null };
+  }
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.trim())
+        : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    return { ok: false, error: `${label} must be a valid number.` };
+  }
+  if (parsed < min || parsed > max) {
+    return { ok: false, error: `${label} must be between ${min} and ${max}.` };
+  }
+  return { ok: true, value: parsed };
+}
+
 async function getSettingsRow(): Promise<SettingsRow> {
   const rows = await prisma.$queryRaw<SettingsRow[]>`
-    SELECT "theme", "logoMime"
+    SELECT "theme", "logoMime", "historyLocationName", "historyLocationLatitude", "historyLocationLongitude"
     FROM "AppSettings"
     WHERE "id" = 'default'
     LIMIT 1
@@ -58,7 +86,13 @@ async function getSettingsRow(): Promise<SettingsRow> {
     VALUES ('default', 'dark')
     ON CONFLICT ("id") DO NOTHING
   `;
-  return { theme: "dark", logoMime: null };
+  return {
+    theme: "dark",
+    logoMime: null,
+    historyLocationName: null,
+    historyLocationLatitude: null,
+    historyLocationLongitude: null,
+  };
 }
 
 apiAdminRouter.get("/session", (req, res) => {
@@ -81,6 +115,91 @@ apiAdminRouter.get("/settings", requireAdmin, async (_req, res) => {
     theme,
     hasLogo: Boolean(row.logoMime),
     logoMime: row.logoMime || null,
+    historyLocationPoint: {
+      name: row.historyLocationName || "",
+      latitude:
+        typeof row.historyLocationLatitude === "number" &&
+        Number.isFinite(row.historyLocationLatitude)
+          ? row.historyLocationLatitude
+          : null,
+      longitude:
+        typeof row.historyLocationLongitude === "number" &&
+        Number.isFinite(row.historyLocationLongitude)
+          ? row.historyLocationLongitude
+          : null,
+    },
+  });
+});
+
+apiAdminRouter.get("/settings/location-point", requireAdmin, async (_req, res) => {
+  const row = await getSettingsRow();
+  res.json({
+    name: row.historyLocationName || "",
+    latitude:
+      typeof row.historyLocationLatitude === "number" &&
+      Number.isFinite(row.historyLocationLatitude)
+        ? row.historyLocationLatitude
+        : null,
+    longitude:
+      typeof row.historyLocationLongitude === "number" &&
+      Number.isFinite(row.historyLocationLongitude)
+        ? row.historyLocationLongitude
+        : null,
+  });
+});
+
+apiAdminRouter.patch("/settings/location-point", requireAdmin, async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const latitudeResult = normalizeLocationCoordinate(body.latitude, "Latitude", -90, 90);
+  if (!latitudeResult.ok) {
+    res.status(400).json({ error: latitudeResult.error });
+    return;
+  }
+  const longitudeResult = normalizeLocationCoordinate(body.longitude, "Longitude", -180, 180);
+  if (!longitudeResult.ok) {
+    res.status(400).json({ error: longitudeResult.error });
+    return;
+  }
+  const latitude = latitudeResult.value;
+  const longitude = longitudeResult.value;
+  if ((latitude === null) !== (longitude === null)) {
+    res.status(400).json({
+      error: "Latitude and Longitude must both be provided, or both be empty.",
+    });
+    return;
+  }
+
+  await prisma.$executeRaw`
+    INSERT INTO "AppSettings" (
+      "id",
+      "theme",
+      "historyLocationName",
+      "historyLocationLatitude",
+      "historyLocationLongitude"
+    )
+    VALUES (
+      'default',
+      'dark',
+      ${name || null},
+      ${latitude},
+      ${longitude}
+    )
+    ON CONFLICT ("id")
+    DO UPDATE SET
+      "historyLocationName" = EXCLUDED."historyLocationName",
+      "historyLocationLatitude" = EXCLUDED."historyLocationLatitude",
+      "historyLocationLongitude" = EXCLUDED."historyLocationLongitude",
+      "updatedAt" = CURRENT_TIMESTAMP
+  `;
+
+  res.json({
+    ok: true,
+    locationPoint: {
+      name: name || "",
+      latitude,
+      longitude,
+    },
   });
 });
 
@@ -209,18 +328,26 @@ apiAdminRouter.get("/history", requireAdmin, async (_req, res) => {
   }));
 
   const serviceEvents = [
-    ...repairRows.map((row) => ({
-      id: row.id,
-      source: "REPAIR" as const,
-      inventoryId: row.inventoryId,
-      unitNumber: row.inventory.unitNumber,
-      assetType: row.inventory.asset?.type ?? null,
-      action: row.action,
-      details: row.details,
-      techName: row.techName,
-      repairHours: row.repairHours,
-      createdAt: row.createdAt.toISOString(),
-    })),
+    ...repairRows
+      .filter(
+        (row) =>
+          !isInspectionDerivedRepairHistoryEntry({
+            action: row.action,
+            details: row.details,
+          }),
+      )
+      .map((row) => ({
+        id: row.id,
+        source: "REPAIR" as const,
+        inventoryId: row.inventoryId,
+        unitNumber: row.inventory.unitNumber,
+        assetType: row.inventory.asset?.type ?? null,
+        action: row.action,
+        details: row.details,
+        techName: row.techName,
+        repairHours: row.repairHours,
+        createdAt: row.createdAt.toISOString(),
+      })),
     ...serviceRows.map((row) => ({
       id: row.id,
       source: "SERVICE" as const,

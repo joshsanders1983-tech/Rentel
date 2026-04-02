@@ -326,6 +326,31 @@
           <div class="row" style="margin-top:10px;">
             <button class="secondary" id="history-refresh" type="button">Refresh History</button>
           </div>
+          <div style="margin-top:12px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#141d28;">
+            <div class="sub" style="color:var(--text); margin-top:0;">Location Point</div>
+            <div class="hint-note" style="margin-top:6px;">Set a reusable location point for this app deployment.</div>
+            <div class="grid-2" style="margin-top:10px;">
+              <div>
+                <label for="history-location-name">Location Name</label>
+                <input id="history-location-name" placeholder="e.g. Main Yard" />
+              </div>
+              <div></div>
+              <div>
+                <label for="history-location-latitude">Latitude</label>
+                <input id="history-location-latitude" type="number" step="0.000001" min="-90" max="90" placeholder="e.g. 41.8781" />
+              </div>
+              <div>
+                <label for="history-location-longitude">Longitude</label>
+                <input id="history-location-longitude" type="number" step="0.000001" min="-180" max="180" placeholder="e.g. -87.6298" />
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <button id="history-location-save" type="button">Save Location Point</button>
+              <button class="secondary" id="history-location-clear" type="button">Clear</button>
+            </div>
+            <div id="history-location-error" class="msg" style="display:none;"></div>
+            <div id="history-location-success" class="msg" style="display:none; color:#6bd18c;"></div>
+          </div>
           <div id="history-error" class="msg" style="display:none;"></div>
 
           <div style="margin-top:12px;">
@@ -633,6 +658,13 @@
       const historyOrdersBody = $("history-orders-body");
       const historyServiceEmpty = $("history-service-empty");
       const historyServiceBody = $("history-service-body");
+      const historyLocationName = $("history-location-name");
+      const historyLocationLatitude = $("history-location-latitude");
+      const historyLocationLongitude = $("history-location-longitude");
+      const historyLocationSaveBtn = $("history-location-save");
+      const historyLocationClearBtn = $("history-location-clear");
+      const historyLocationErr = $("history-location-error");
+      const historyLocationSuccess = $("history-location-success");
       const settingsTheme = $("settings-theme");
       const settingsSaveThemeBtn = $("settings-save-theme");
       const settingsLogoInput = $("settings-logo-input");
@@ -674,6 +706,11 @@
       function clearSettingsMessages() {
         setMsg(settingsErr, "");
         setMsg(settingsSuccess, "");
+      }
+
+      function clearHistoryLocationMessages() {
+        setMsg(historyLocationErr, "");
+        setMsg(historyLocationSuccess, "");
       }
 
       function fileToDataUrl(file) {
@@ -1363,11 +1400,16 @@
         return [datePart, timePart].filter((part) => Boolean(part)).join(" ");
       }
 
-      function historyStateLabel(listKind) {
+      function historyStateLabel(entry) {
+        const listKind = entry && entry.listKind;
         const value = String(listKind || "").trim().toUpperCase();
         if (value === "RESERVATION") return "Reservation";
         if (value === "ON_RENT") return "On Rent";
-        if (value === "RETURNED") return "Returned";
+        if (value === "RETURNED") {
+          const assigned = Array.isArray(entry && entry.assignedUnits) ? entry.assignedUnits : [];
+          if (assigned.length === 0) return "Completed";
+          return "Returned";
+        }
         if (value === "POTENTIAL") return "Potential";
         return value || "-";
       }
@@ -1393,7 +1435,7 @@
             .map((unit) => String(unit && unit.unitNumber ? unit.unitNumber : "").trim())
             .filter((value) => Boolean(value));
           appendTextCell(tr, String(entry.orderNumber || "").trim() || "-");
-          appendTextCell(tr, historyStateLabel(entry.listKind));
+          appendTextCell(tr, historyStateLabel(entry));
           appendTextCell(tr, String(entry.customerName || "").trim() || "-");
           appendTextCell(tr, String(entry.address || "").trim() || "-");
           appendTextCell(tr, String(entry.type || "").trim() || "-");
@@ -1708,6 +1750,19 @@
           : "No logo uploaded.";
       }
 
+      async function loadHistoryLocationPoint() {
+        const point = await api("/api/admin/settings/location-point");
+        historyLocationName.value = String(point && point.name ? point.name : "").trim();
+        historyLocationLatitude.value =
+          point && typeof point.latitude === "number" && Number.isFinite(point.latitude)
+            ? String(point.latitude)
+            : "";
+        historyLocationLongitude.value =
+          point && typeof point.longitude === "number" && Number.isFinite(point.longitude)
+            ? String(point.longitude)
+            : "";
+      }
+
       function openEditModal(row) {
         setMsg(editErr, "");
         editId.value = row.id;
@@ -1782,6 +1837,7 @@
           settle("Inspection mappings", loadInspectionAssetMappings),
           settle("Technicians", loadTechnicians),
           settle("Admin settings", loadAdminSettings),
+          settle("History location point", loadHistoryLocationPoint),
           settle("Maintenance rules", loadMaintenanceRules),
           settle("History", loadHistory),
         ]);
@@ -2118,9 +2174,75 @@
       historyRefreshBtn.addEventListener("click", async () => {
         setMsg(historyErr, "");
         try {
-          await loadHistory();
+          await Promise.all([loadHistory(), loadHistoryLocationPoint()]);
         } catch (e) {
           setMsg(historyErr, String(e.message || e));
+        }
+      });
+
+      historyLocationSaveBtn.addEventListener("click", async () => {
+        clearHistoryLocationMessages();
+        const name = historyLocationName.value.trim();
+        const latitudeText = historyLocationLatitude.value.trim();
+        const longitudeText = historyLocationLongitude.value.trim();
+        const latitude = latitudeText === "" ? null : Number(latitudeText);
+        const longitude = longitudeText === "" ? null : Number(longitudeText);
+        if ((latitude === null) !== (longitude === null)) {
+          setMsg(historyLocationErr, "Latitude and Longitude must both be filled, or both be blank.");
+          return;
+        }
+        if (latitude !== null && !Number.isFinite(latitude)) {
+          setMsg(historyLocationErr, "Latitude must be a valid number.");
+          return;
+        }
+        if (longitude !== null && !Number.isFinite(longitude)) {
+          setMsg(historyLocationErr, "Longitude must be a valid number.");
+          return;
+        }
+
+        const originalText = historyLocationSaveBtn.textContent;
+        historyLocationSaveBtn.disabled = true;
+        historyLocationSaveBtn.textContent = "Saving...";
+        try {
+          await api("/api/admin/settings/location-point", {
+            method: "PATCH",
+            body: JSON.stringify({
+              name,
+              latitude,
+              longitude,
+            }),
+          });
+          await loadHistoryLocationPoint();
+          setMsg(historyLocationSuccess, "Location point saved.");
+        } catch (e) {
+          setMsg(historyLocationErr, String(e.message || e));
+        } finally {
+          historyLocationSaveBtn.disabled = false;
+          historyLocationSaveBtn.textContent = originalText;
+        }
+      });
+
+      historyLocationClearBtn.addEventListener("click", async () => {
+        clearHistoryLocationMessages();
+        const originalText = historyLocationClearBtn.textContent;
+        historyLocationClearBtn.disabled = true;
+        historyLocationClearBtn.textContent = "Clearing...";
+        try {
+          await api("/api/admin/settings/location-point", {
+            method: "PATCH",
+            body: JSON.stringify({
+              name: "",
+              latitude: null,
+              longitude: null,
+            }),
+          });
+          await loadHistoryLocationPoint();
+          setMsg(historyLocationSuccess, "Location point cleared.");
+        } catch (e) {
+          setMsg(historyLocationErr, String(e.message || e));
+        } finally {
+          historyLocationClearBtn.disabled = false;
+          historyLocationClearBtn.textContent = originalText;
         }
       });
 

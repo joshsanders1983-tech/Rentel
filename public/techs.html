@@ -133,6 +133,40 @@
 
       <div class="card">
         <div class="row">
+          <div>
+            <h2>Post Rental Inspections</h2>
+            <div class="sub">Review flagged post-rental inspection items and offload them to spreadsheet.</div>
+          </div>
+          <button class="btn secondary" id="post-inspections-toggle" type="button">Open Post Rental Inspections</button>
+        </div>
+        <div id="post-inspections-panel" style="display:none; margin-top:10px;">
+          <div class="row">
+            <div class="sub" id="post-inspections-count">0 entries</div>
+            <div class="row buttons">
+              <button class="btn secondary" id="post-inspections-refresh" type="button">Refresh</button>
+              <button class="btn warn" id="post-inspections-offload" type="button">Offload to Spreadsheet</button>
+            </div>
+          </div>
+          <div id="post-inspections-empty" class="empty" style="display:none;">No post-rental inspection entries found.</div>
+          <table class="mobile-cards-table">
+            <thead>
+              <tr>
+                <th style="width:200px;">Inspection Date</th>
+                <th style="width:130px;">Unit #</th>
+                <th style="width:130px;">Tech</th>
+                <th>Flagged Items</th>
+                <th>Follow-up</th>
+              </tr>
+            </thead>
+            <tbody id="post-inspections-body"></tbody>
+          </table>
+          <div id="post-inspections-error" class="msg" style="display:none;"></div>
+          <div id="post-inspections-success" class="msg ok" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
           <h2>Returned</h2>
           <div class="sub" id="returned-count">0 units</div>
         </div>
@@ -464,6 +498,15 @@
       const manualDownSuccess = $("manual-down-success");
       const techLogout = $("tech-logout");
       const techSessionName = $("tech-session-name");
+      const postInspectionsToggle = $("post-inspections-toggle");
+      const postInspectionsPanel = $("post-inspections-panel");
+      const postInspectionsCount = $("post-inspections-count");
+      const postInspectionsRefresh = $("post-inspections-refresh");
+      const postInspectionsOffload = $("post-inspections-offload");
+      const postInspectionsEmpty = $("post-inspections-empty");
+      const postInspectionsBody = $("post-inspections-body");
+      const postInspectionsError = $("post-inspections-error");
+      const postInspectionsSuccess = $("post-inspections-success");
 
       let lastRentedByUnit = {};
       let returnedAtByUnit = {};
@@ -478,6 +521,8 @@
       let damagePhotoFiles = [];
       let dueMaintenanceTasks = [];
       let dueTechnicianDirectory = [];
+      let postRentalInspectionEntries = [];
+      let postInspectionsOpen = false;
       const INSPECTION_OPTION_DEFS = [
         { key: "ok", label: "Ok" },
         { key: "needsAttention", label: "Needs attention" },
@@ -644,6 +689,119 @@
           .filter(Boolean)
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(" ");
+      }
+
+      function setPostInspectionsPanelOpen(nextOpen) {
+        postInspectionsOpen = nextOpen === true;
+        postInspectionsPanel.style.display = postInspectionsOpen ? "block" : "none";
+        postInspectionsToggle.textContent = postInspectionsOpen
+          ? "Hide Post Rental Inspections"
+          : "Open Post Rental Inspections";
+      }
+
+      function formatFlaggedItemLines(entry) {
+        const rows = Array.isArray(entry && entry.flaggedItems) ? entry.flaggedItems : [];
+        const out = [];
+        for (const row of rows) {
+          const label = String(row && row.label ? row.label : "").trim();
+          const selectedOption = String(row && row.selectedOption ? row.selectedOption : "").trim();
+          if (!label || !selectedOption) continue;
+          out.push(`${label} (${selectedOption})`);
+        }
+        return out;
+      }
+
+      function formatPostInspectionFollowup(entry) {
+        const parts = [];
+        const issueDescription = String(entry && entry.issueDescription ? entry.issueDescription : "").trim();
+        const damageDescription = String(entry && entry.damageDescription ? entry.damageDescription : "").trim();
+        const damagePhotos = Array.isArray(entry && entry.damagePhotos) ? entry.damagePhotos : [];
+        if (issueDescription) parts.push(`Needs attention: ${issueDescription}`);
+        if (damageDescription) parts.push(`Damaged: ${damageDescription}`);
+        if (damagePhotos.length > 0) parts.push(`Photos: ${damagePhotos.length}`);
+        return parts;
+      }
+
+      function renderPostRentalInspections() {
+        postInspectionsBody.innerHTML = "";
+        const entries = Array.isArray(postRentalInspectionEntries) ? postRentalInspectionEntries : [];
+        postInspectionsCount.textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
+        if (entries.length === 0) {
+          postInspectionsEmpty.style.display = "block";
+          return;
+        }
+        postInspectionsEmpty.style.display = "none";
+
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          const flaggedLines = formatFlaggedItemLines(entry);
+          const followupLines = formatPostInspectionFollowup(entry);
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDateTime(entry.submittedAt))}</td>
+            <td>${escapeHtml(entry.unitNumber || "-")}</td>
+            <td>${escapeHtml(entry.techName || "-")}</td>
+            <td>${flaggedLines.length > 0 ? flaggedLines.map((line) => escapeHtml(line)).join("<br/>") : "-"}</td>
+            <td>${followupLines.length > 0 ? followupLines.map((line) => escapeHtml(line)).join("<br/>") : "-"}</td>
+          `;
+          applyMobileLabels(tr, ["Inspection Date", "Unit #", "Tech", "Flagged Items", "Follow-up"]);
+          postInspectionsBody.appendChild(tr);
+        }
+      }
+
+      async function loadPostRentalInspections() {
+        setMsg(postInspectionsError, "");
+        const rows = await api("/api/post-rental-inspections");
+        postRentalInspectionEntries = Array.isArray(rows) ? rows : [];
+        renderPostRentalInspections();
+      }
+
+      async function togglePostRentalInspections() {
+        if (postInspectionsOpen) {
+          setPostInspectionsPanelOpen(false);
+          return;
+        }
+        setPostInspectionsPanelOpen(true);
+        await loadPostRentalInspections();
+      }
+
+      async function offloadPostRentalInspections() {
+        setMsg(postInspectionsError, "");
+        setMsg(postInspectionsSuccess, "");
+        const entryCount = Array.isArray(postRentalInspectionEntries)
+          ? postRentalInspectionEntries.length
+          : 0;
+        if (entryCount === 0) {
+          setMsg(postInspectionsSuccess, "No post-rental inspection entries to offload.");
+          return;
+        }
+        const confirmed = window.confirm(
+          `Offload ${entryCount} post-rental inspection entr${
+            entryCount === 1 ? "y" : "ies"
+          } to the Google Sheet and clear them from this app queue?`,
+        );
+        if (!confirmed) return;
+
+        const originalText = postInspectionsOffload.textContent;
+        postInspectionsOffload.disabled = true;
+        postInspectionsOffload.textContent = "Offloading...";
+        try {
+          const result = await api("/api/post-rental-inspections/offload", {
+            method: "POST",
+            body: JSON.stringify({}),
+          });
+          const exportedEntries = Number(result && result.exportedEntries ? result.exportedEntries : 0);
+          const exportedRows = Number(result && result.exportedRows ? result.exportedRows : 0);
+          setMsg(
+            postInspectionsSuccess,
+            `Offloaded ${exportedEntries} entr${
+              exportedEntries === 1 ? "y" : "ies"
+            } (${exportedRows} sheet row${exportedRows === 1 ? "" : "s"}).`,
+          );
+          await loadPostRentalInspections();
+        } finally {
+          postInspectionsOffload.disabled = false;
+          postInspectionsOffload.textContent = originalText;
+        }
       }
 
       async function loadDueTechnicianDirectory() {
@@ -845,6 +1003,27 @@
         if (action !== "DOWN") return false;
         const details = String(entry && entry.details ? entry.details : "");
         return /(^|[|\n])\s*Damaged\s*:/i.test(details);
+      }
+
+      function isInspectionDrivenRepairEntry(entry) {
+        const action = String(entry && entry.action ? entry.action : "").trim().toUpperCase();
+        const details = String(entry && entry.details ? entry.details : "").trim();
+        if (!details) return false;
+        if (
+          action === "COMPLETE" &&
+          /^inspection completed and unit returned to available\.?$/i.test(details)
+        ) {
+          return true;
+        }
+        if (
+          action === "DOWN" &&
+          (/(^|[|\n])\s*Damaged\s*:/i.test(details) ||
+            /(^|[|\n])\s*Needs attention\s*:/i.test(details) ||
+            /^inspection result moved this unit to down\.?$/i.test(details))
+        ) {
+          return true;
+        }
+        return false;
       }
 
       function renderDamageHistoryRows(entries) {
@@ -1176,7 +1355,7 @@
         if (results[1].status === "fulfilled") {
           const damageEntries = repairEntries.filter((entry) => isDamageInspectionDownEntry(entry));
           const repairTimelineEntries = repairEntries.filter(
-            (entry) => !isDamageInspectionDownEntry(entry),
+            (entry) => !isInspectionDrivenRepairEntry(entry),
           );
           renderDamageHistoryRows(damageEntries);
           renderRepairHistoryRows(repairTimelineEntries);
@@ -1673,6 +1852,21 @@
         );
       });
       manualDownCancel.addEventListener("click", resetManualDownForm);
+      postInspectionsToggle.addEventListener("click", () => {
+        togglePostRentalInspections().catch((e) =>
+          setMsg(postInspectionsError, "Failed to load post-rental inspections: " + String(e.message || e)),
+        );
+      });
+      postInspectionsRefresh.addEventListener("click", () => {
+        loadPostRentalInspections().catch((e) =>
+          setMsg(postInspectionsError, "Failed to refresh post-rental inspections: " + String(e.message || e)),
+        );
+      });
+      postInspectionsOffload.addEventListener("click", () => {
+        offloadPostRentalInspections().catch((e) =>
+          setMsg(postInspectionsError, "Failed to offload entries: " + String(e.message || e)),
+        );
+      });
       unitHistoryView.addEventListener("click", () => {
         viewUnitHistoryFromCard().catch((e) =>
           setMsg(unitHistoryError, "Failed to load unit history: " + String(e.message || e)),
@@ -1737,6 +1931,8 @@
           setMsg(dueTaskErr, String(e.message || e));
         }
       });
+
+      setPostInspectionsPanelOpen(false);
 
       (async () => {
         try {

@@ -12,7 +12,7 @@ import { appendRepairHistoryEntry } from "../lib/repairHistory.js";
 import { removeReturnedOnRentUnit } from "../lib/reservationsState.js";
 import { normalizeStatus } from "../lib/statusFormat.js";
 import { getTechSession, requireTech } from "../lib/techAuth.js";
-import type { Asset, Inventory } from "@prisma/client";
+import type { Asset, Inventory, Prisma } from "@prisma/client";
 
 export const apiInspectionsRouter = Router();
 
@@ -60,6 +60,10 @@ const DEFAULT_OPTIONS = {
 };
 
 type InspectionOptions = typeof EMPTY_OPTIONS;
+type PostRentalFlaggedItem = {
+  label: string;
+  selectedOption: string;
+};
 
 function upperText(value: unknown) {
   return String(value ?? "").trim().toUpperCase();
@@ -136,6 +140,36 @@ function parseInspectionOptions(
     damaged: parseBool("damaged"),
     na: parseBool("na"),
   };
+}
+
+function buildPostRentalFlaggedItems(
+  formItems: Array<{ id: string; label: string }>,
+  submittedById: Map<string, InspectionOptions>,
+): PostRentalFlaggedItem[] {
+  const flaggedItems: PostRentalFlaggedItem[] = [];
+  for (const item of formItems) {
+    const selected = submittedById.get(item.id) ?? EMPTY_OPTIONS;
+    if (selected.ok || selected.na) continue;
+    if (selected.needsAttention) {
+      flaggedItems.push({
+        label: item.label,
+        selectedOption: "Needs attention",
+      });
+      continue;
+    }
+    if (selected.damaged) {
+      flaggedItems.push({
+        label: item.label,
+        selectedOption: "Damaged",
+      });
+      continue;
+    }
+    flaggedItems.push({
+      label: item.label,
+      selectedOption: "Other",
+    });
+  }
+  return flaggedItems;
 }
 
 async function getOrCreateDefaultForm() {
@@ -735,6 +769,7 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
     });
     return;
   }
+  const postRentalFlaggedItems = buildPostRentalFlaggedItems(formItems, submittedById);
 
   const needsAttentionSelected = formItems.some((item) => {
     const selected = submittedById.get(item.id) ?? EMPTY_OPTIONS;
@@ -835,6 +870,24 @@ apiInspectionsRouter.post("/inventory/:inventoryId/complete", requireTech, async
       },
       include: { asset: true },
     });
+
+    if (postRentalFlaggedItems.length > 0) {
+      await tx.postRentalInspection.create({
+        data: {
+          inspectionSubmissionId: submission.id,
+          inventoryId,
+          unitNumberSnapshot: inventory.unitNumber,
+          assetTypeSnapshot: inventory.asset?.type ?? null,
+          assetDescriptionSnapshot: inventory.asset?.description ?? null,
+          techNameSnapshot: actorName || null,
+          submittedAt,
+          issueDescription: issueDescription || null,
+          damageDescription: damageDescription || null,
+          damagePhotosJson: damagePhotos as unknown as Prisma.InputJsonValue,
+          flaggedItemsJson: postRentalFlaggedItems as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     return { unit: updated, inspectionSubmissionId: submission.id };
   });
