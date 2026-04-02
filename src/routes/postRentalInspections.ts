@@ -34,10 +34,6 @@ type PostRentalFlaggedItem = {
 
 type OffloadSettingsRow = {
   offloadPostRentalInspectionsLocation: string | null;
-  googleSheetsClientEmail: string | null;
-  googleSheetsPrivateKey: string | null;
-  googleSheetsSheetId: string | null;
-  googleSheetsSheetGid: number | null;
 };
 
 type ResolvedOffloadConfig = {
@@ -75,11 +71,7 @@ function parseSpreadsheetLocation(
 async function loadOffloadConfig(): Promise<ResolvedOffloadConfig> {
   const rows = await prisma.$queryRaw<OffloadSettingsRow[]>`
     SELECT
-      "offloadPostRentalInspectionsLocation",
-      "googleSheetsClientEmail",
-      "googleSheetsPrivateKey",
-      "googleSheetsSheetId",
-      "googleSheetsSheetGid"
+      "offloadPostRentalInspectionsLocation"
     FROM "AppSettings"
     WHERE "id" = 'default'
     LIMIT 1
@@ -88,38 +80,24 @@ async function loadOffloadConfig(): Promise<ResolvedOffloadConfig> {
   const locationParsed = parseSpreadsheetLocation(
     row?.offloadPostRentalInspectionsLocation ? String(row.offloadPostRentalInspectionsLocation) : "",
   );
-  const configuredSheetId = row?.googleSheetsSheetId ? String(row.googleSheetsSheetId).trim() : "";
   const envSheetId = process.env.POST_RENTAL_INSPECTIONS_SHEET_ID?.trim() || "";
-  const spreadsheetId =
-    configuredSheetId || locationParsed?.spreadsheetId || envSheetId || DEFAULT_SPREADSHEET_ID;
+  const spreadsheetId = locationParsed?.spreadsheetId || envSheetId || DEFAULT_SPREADSHEET_ID;
 
-  const configuredGid =
-    typeof row?.googleSheetsSheetGid === "number" && Number.isInteger(row.googleSheetsSheetGid)
-      ? row.googleSheetsSheetGid
-      : null;
   const envGidRaw = process.env.POST_RENTAL_INSPECTIONS_SHEET_GID?.trim() || "";
   const envGidParsed = Number(envGidRaw);
   const envGid =
     Number.isInteger(envGidParsed) && envGidParsed >= 0 ? envGidParsed : null;
-  const sheetGid = configuredGid ?? locationParsed?.sheetGid ?? envGid ?? DEFAULT_SHEET_GID;
+  const sheetGid = locationParsed?.sheetGid ?? envGid ?? DEFAULT_SHEET_GID;
 
-  const configuredClientEmail = row?.googleSheetsClientEmail
-    ? String(row.googleSheetsClientEmail).trim()
-    : "";
-  const configuredPrivateKey = row?.googleSheetsPrivateKey
-    ? String(row.googleSheetsPrivateKey).replace(/\\n/g, "\n").trim()
-    : "";
   const envClientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL?.trim() || "";
   const envPrivateKeyRaw = process.env.GOOGLE_SHEETS_PRIVATE_KEY || "";
   const envPrivateKey = envPrivateKeyRaw.replace(/\\n/g, "\n").trim();
-  const googleSheetsClientEmail = configuredClientEmail || envClientEmail;
-  const googleSheetsPrivateKey = configuredPrivateKey || envPrivateKey;
 
   return {
     spreadsheetId,
     sheetGid,
-    googleSheetsClientEmail,
-    googleSheetsPrivateKey,
+    googleSheetsClientEmail: envClientEmail,
+    googleSheetsPrivateKey: envPrivateKey,
   };
 }
 
@@ -148,6 +126,110 @@ function parseDamagePhotos(raw: Prisma.JsonValue): string[] {
   return out;
 }
 
+function buildFlaggedItemsFromSubmissionResults(
+  results: Array<{
+    labelSnapshot: string;
+    selectedNeedsAttention: boolean;
+    selectedDamaged: boolean;
+  }>,
+): PostRentalFlaggedItem[] {
+  const flagged: PostRentalFlaggedItem[] = [];
+  for (const result of results) {
+    const label = String(result.labelSnapshot || "").trim();
+    if (!label) continue;
+    if (result.selectedNeedsAttention) {
+      flagged.push({ label, selectedOption: "Needs attention" });
+      continue;
+    }
+    if (result.selectedDamaged) {
+      flagged.push({ label, selectedOption: "Damaged" });
+    }
+  }
+  return flagged;
+}
+
+async function backfillPostRentalInspectionQueue(): Promise<number> {
+  const [existingRows, flaggedSubmissions] = await Promise.all([
+    prisma.postRentalInspection.findMany({
+      select: { inspectionSubmissionId: true },
+    }),
+    prisma.inspectionSubmission.findMany({
+      where: {
+        itemResults: {
+          some: {
+            OR: [{ selectedNeedsAttention: true }, { selectedDamaged: true }],
+          },
+        },
+      },
+      include: {
+        inventory: {
+          include: { asset: true },
+        },
+        itemResults: {
+          select: {
+            labelSnapshot: true,
+            selectedNeedsAttention: true,
+            selectedDamaged: true,
+          },
+        },
+      },
+      orderBy: { submittedAt: "desc" },
+    }),
+  ]);
+
+  const existingSubmissionIds = new Set(
+    existingRows
+      .map((row) => String(row.inspectionSubmissionId || "").trim())
+      .filter(Boolean),
+  );
+
+  const rowsToCreate: Array<{
+    inspectionSubmissionId: string;
+    inventoryId: string;
+    unitNumberSnapshot: string;
+    assetTypeSnapshot: string | null;
+    assetDescriptionSnapshot: string | null;
+    techNameSnapshot: string | null;
+    submittedAt: Date;
+    issueDescription: string | null;
+    damageDescription: string | null;
+    damagePhotosJson: Prisma.InputJsonValue;
+    flaggedItemsJson: Prisma.InputJsonValue;
+  }> = [];
+
+  for (const submission of flaggedSubmissions) {
+    const submissionId = String(submission.id || "").trim();
+    if (!submissionId || existingSubmissionIds.has(submissionId)) continue;
+
+    const flaggedItems = buildFlaggedItemsFromSubmissionResults(submission.itemResults || []);
+    if (flaggedItems.length === 0) continue;
+
+    rowsToCreate.push({
+      inspectionSubmissionId: submissionId,
+      inventoryId: submission.inventoryId,
+      unitNumberSnapshot: submission.inventory.unitNumber,
+      assetTypeSnapshot: submission.inventory.asset?.type ?? null,
+      assetDescriptionSnapshot: submission.inventory.asset?.description ?? null,
+      techNameSnapshot: submission.submittedByTechName ?? null,
+      submittedAt: submission.submittedAt,
+      issueDescription: null,
+      damageDescription: null,
+      damagePhotosJson: [] as Prisma.InputJsonValue,
+      flaggedItemsJson: flaggedItems as unknown as Prisma.InputJsonValue,
+    });
+  }
+
+  if (rowsToCreate.length === 0) {
+    return 0;
+  }
+
+  const created = await prisma.postRentalInspection.createMany({
+    data: rowsToCreate,
+    skipDuplicates: true,
+  });
+  return Number(created.count || 0);
+}
+
 function toBase64UrlJson(value: object): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
@@ -158,7 +240,7 @@ async function getGoogleSheetsAccessToken(config: ResolvedOffloadConfig): Promis
 
   if (!clientEmail || !privateKey) {
     throw new Error(
-      "Google Sheets credentials are not configured. Add them in Admin > App Settings (or set GOOGLE_SHEETS_CLIENT_EMAIL and GOOGLE_SHEETS_PRIVATE_KEY in .env).",
+      "Google Sheets credentials are not configured. Set GOOGLE_SHEETS_CLIENT_EMAIL and GOOGLE_SHEETS_PRIVATE_KEY in environment variables.",
     );
   }
 
@@ -296,6 +378,8 @@ function buildExportRows(entry: StoredPostRentalInspectionRow): string[][] {
 
 apiPostRentalInspectionsRouter.get("/", requireTech, async (_req, res) => {
   try {
+    await backfillPostRentalInspectionQueue();
+
     const rows = (await prisma.postRentalInspection.findMany({
       orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
     })) as StoredPostRentalInspectionRow[];

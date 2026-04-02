@@ -19,10 +19,6 @@ type SettingsRow = {
   offloadServiceHistoryLocation: string | null;
   offloadDamageHistoryLocation: string | null;
   offloadPostRentalInspectionsLocation: string | null;
-  googleSheetsClientEmail: string | null;
-  googleSheetsPrivateKey: string | null;
-  googleSheetsSheetId: string | null;
-  googleSheetsSheetGid: number | null;
 };
 
 type HistoryAssignedUnit = {
@@ -59,24 +55,6 @@ function normalizeOptionalText(value: unknown): string | null {
   return next ? next : null;
 }
 
-function normalizeSheetGid(
-  value: unknown,
-): { ok: true; value: number | null } | { ok: false; error: string } {
-  if (value === null || value === undefined || value === "") {
-    return { ok: true, value: null };
-  }
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value.trim())
-        : Number.NaN;
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    return { ok: false, error: "Google Sheet GID must be an integer greater than or equal to 0." };
-  }
-  return { ok: true, value: parsed };
-}
-
 async function getSettingsRow(): Promise<SettingsRow> {
   const rows = await prisma.$queryRaw<SettingsRow[]>`
     SELECT
@@ -85,11 +63,7 @@ async function getSettingsRow(): Promise<SettingsRow> {
       "offloadOrderHistoryLocation",
       "offloadServiceHistoryLocation",
       "offloadDamageHistoryLocation",
-      "offloadPostRentalInspectionsLocation",
-      "googleSheetsClientEmail",
-      "googleSheetsPrivateKey",
-      "googleSheetsSheetId",
-      "googleSheetsSheetGid"
+      "offloadPostRentalInspectionsLocation"
     FROM "AppSettings"
     WHERE "id" = 'default'
     LIMIT 1
@@ -107,10 +81,6 @@ async function getSettingsRow(): Promise<SettingsRow> {
     offloadServiceHistoryLocation: null,
     offloadDamageHistoryLocation: null,
     offloadPostRentalInspectionsLocation: null,
-    googleSheetsClientEmail: null,
-    googleSheetsPrivateKey: null,
-    googleSheetsSheetId: null,
-    googleSheetsSheetGid: null,
   };
 }
 
@@ -139,13 +109,6 @@ apiAdminRouter.get("/settings", requireAdmin, async (_req, res) => {
       serviceHistoryLocation: row.offloadServiceHistoryLocation || "",
       damageHistoryLocation: row.offloadDamageHistoryLocation || "",
       postRentalInspectionsLocation: row.offloadPostRentalInspectionsLocation || "",
-      googleSheetsClientEmail: row.googleSheetsClientEmail || "",
-      googleSheetsPrivateKey: row.googleSheetsPrivateKey || "",
-      googleSheetsSheetId: row.googleSheetsSheetId || "",
-      googleSheetsSheetGid:
-        typeof row.googleSheetsSheetGid === "number" && Number.isInteger(row.googleSheetsSheetGid)
-          ? row.googleSheetsSheetGid
-          : null,
     },
   });
 });
@@ -158,15 +121,6 @@ apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
   const offloadPostRentalInspectionsLocation = normalizeOptionalText(
     body.postRentalInspectionsLocation,
   );
-  const googleSheetsClientEmail = normalizeOptionalText(body.googleSheetsClientEmail);
-  const googleSheetsPrivateKey = normalizeOptionalText(body.googleSheetsPrivateKey);
-  const googleSheetsSheetId = normalizeOptionalText(body.googleSheetsSheetId);
-  const gidResult = normalizeSheetGid(body.googleSheetsSheetGid);
-  if (!gidResult.ok) {
-    res.status(400).json({ error: gidResult.error });
-    return;
-  }
-  const googleSheetsSheetGid = gidResult.value;
 
   await prisma.$executeRaw`
     INSERT INTO "AppSettings" (
@@ -175,11 +129,7 @@ apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
       "offloadOrderHistoryLocation",
       "offloadServiceHistoryLocation",
       "offloadDamageHistoryLocation",
-      "offloadPostRentalInspectionsLocation",
-      "googleSheetsClientEmail",
-      "googleSheetsPrivateKey",
-      "googleSheetsSheetId",
-      "googleSheetsSheetGid"
+      "offloadPostRentalInspectionsLocation"
     )
     VALUES (
       'default',
@@ -187,11 +137,7 @@ apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
       ${offloadOrderHistoryLocation},
       ${offloadServiceHistoryLocation},
       ${offloadDamageHistoryLocation},
-      ${offloadPostRentalInspectionsLocation},
-      ${googleSheetsClientEmail},
-      ${googleSheetsPrivateKey},
-      ${googleSheetsSheetId},
-      ${googleSheetsSheetGid}
+      ${offloadPostRentalInspectionsLocation}
     )
     ON CONFLICT ("id")
     DO UPDATE SET
@@ -199,10 +145,10 @@ apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
       "offloadServiceHistoryLocation" = EXCLUDED."offloadServiceHistoryLocation",
       "offloadDamageHistoryLocation" = EXCLUDED."offloadDamageHistoryLocation",
       "offloadPostRentalInspectionsLocation" = EXCLUDED."offloadPostRentalInspectionsLocation",
-      "googleSheetsClientEmail" = EXCLUDED."googleSheetsClientEmail",
-      "googleSheetsPrivateKey" = EXCLUDED."googleSheetsPrivateKey",
-      "googleSheetsSheetId" = EXCLUDED."googleSheetsSheetId",
-      "googleSheetsSheetGid" = EXCLUDED."googleSheetsSheetGid",
+      "googleSheetsClientEmail" = NULL,
+      "googleSheetsPrivateKey" = NULL,
+      "googleSheetsSheetId" = NULL,
+      "googleSheetsSheetGid" = NULL,
       "updatedAt" = CURRENT_TIMESTAMP
   `;
 
@@ -213,10 +159,6 @@ apiAdminRouter.patch("/settings/offload", requireAdmin, async (req, res) => {
       serviceHistoryLocation: offloadServiceHistoryLocation || "",
       damageHistoryLocation: offloadDamageHistoryLocation || "",
       postRentalInspectionsLocation: offloadPostRentalInspectionsLocation || "",
-      googleSheetsClientEmail: googleSheetsClientEmail || "",
-      googleSheetsPrivateKey: googleSheetsPrivateKey || "",
-      googleSheetsSheetId: googleSheetsSheetId || "",
-      googleSheetsSheetGid,
     },
   });
 });

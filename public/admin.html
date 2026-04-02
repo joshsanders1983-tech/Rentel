@@ -171,7 +171,7 @@
           <div style="margin-top:12px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#141d28;">
             <div class="sub" style="color:var(--text); margin-top:0;">Offload Settings</div>
             <div class="hint-note" style="margin-top:6px;">
-              Configure destination locations and Google Sheets credentials for exports.
+              Configure destination locations for exports.
             </div>
             <div class="grid-2" style="margin-top:10px;">
               <div>
@@ -189,22 +189,6 @@
               <div>
                 <label for="offload-post-rental-location">Post Rental Inspections Offload Location</label>
                 <input id="offload-post-rental-location" placeholder="e.g. Google Sheet URL or folder path" />
-              </div>
-              <div>
-                <label for="offload-google-sheets-client-email">Google Sheets Client Email</label>
-                <input id="offload-google-sheets-client-email" placeholder="service-account@project.iam.gserviceaccount.com" />
-              </div>
-              <div>
-                <label for="offload-google-sheets-sheet-id">Google Sheet ID (optional)</label>
-                <input id="offload-google-sheets-sheet-id" placeholder="1amsUbJfgmT6b_A0CSym9BOpQlsx8vTFuoX1zgOeqPw4" />
-              </div>
-              <div>
-                <label for="offload-google-sheets-sheet-gid">Google Sheet GID (optional)</label>
-                <input id="offload-google-sheets-sheet-gid" type="number" min="0" step="1" placeholder="0" />
-              </div>
-              <div class="full">
-                <label for="offload-google-sheets-private-key">Google Sheets Private Key</label>
-                <textarea id="offload-google-sheets-private-key" placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"></textarea>
               </div>
             </div>
             <div class="row" style="margin-top:10px;">
@@ -693,10 +677,6 @@
       const offloadServiceHistoryLocation = $("offload-service-history-location");
       const offloadDamageHistoryLocation = $("offload-damage-history-location");
       const offloadPostRentalLocation = $("offload-post-rental-location");
-      const offloadGoogleSheetsClientEmail = $("offload-google-sheets-client-email");
-      const offloadGoogleSheetsPrivateKey = $("offload-google-sheets-private-key");
-      const offloadGoogleSheetsSheetId = $("offload-google-sheets-sheet-id");
-      const offloadGoogleSheetsSheetGid = $("offload-google-sheets-sheet-gid");
 
       let assets = [];
       let inventoryRows = [];
@@ -1777,13 +1757,6 @@
         offloadServiceHistoryLocation.value = String(offload.serviceHistoryLocation || "").trim();
         offloadDamageHistoryLocation.value = String(offload.damageHistoryLocation || "").trim();
         offloadPostRentalLocation.value = String(offload.postRentalInspectionsLocation || "").trim();
-        offloadGoogleSheetsClientEmail.value = String(offload.googleSheetsClientEmail || "").trim();
-        offloadGoogleSheetsPrivateKey.value = String(offload.googleSheetsPrivateKey || "");
-        offloadGoogleSheetsSheetId.value = String(offload.googleSheetsSheetId || "").trim();
-        offloadGoogleSheetsSheetGid.value =
-          typeof offload.googleSheetsSheetGid === "number" && Number.isFinite(offload.googleSheetsSheetGid)
-            ? String(offload.googleSheetsSheetGid)
-            : "";
       }
 
       function openEditModal(row) {
@@ -2204,13 +2177,6 @@
 
       settingsSaveOffloadBtn.addEventListener("click", async () => {
         clearOffloadSettingsMessages();
-        const sheetGidText = offloadGoogleSheetsSheetGid.value.trim();
-        const sheetGid = sheetGidText === "" ? null : Number(sheetGidText);
-        if (sheetGid !== null && (!Number.isInteger(sheetGid) || sheetGid < 0)) {
-          setMsg(settingsOffloadErr, "Google Sheet GID must be an integer greater than or equal to 0.");
-          return;
-        }
-
         const originalText = settingsSaveOffloadBtn.textContent;
         settingsSaveOffloadBtn.disabled = true;
         settingsSaveOffloadBtn.textContent = "Saving...";
@@ -2222,10 +2188,6 @@
               serviceHistoryLocation: offloadServiceHistoryLocation.value.trim(),
               damageHistoryLocation: offloadDamageHistoryLocation.value.trim(),
               postRentalInspectionsLocation: offloadPostRentalLocation.value.trim(),
-              googleSheetsClientEmail: offloadGoogleSheetsClientEmail.value.trim(),
-              googleSheetsPrivateKey: offloadGoogleSheetsPrivateKey.value,
-              googleSheetsSheetId: offloadGoogleSheetsSheetId.value.trim(),
-              googleSheetsSheetGid: sheetGid,
             }),
           });
           await loadAdminSettings();

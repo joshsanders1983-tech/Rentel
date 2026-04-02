@@ -36,6 +36,15 @@ export async function ensurePostgresSchemaCompat(): Promise<void> {
     `ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "googleSheetsSheetGid" INTEGER;`,
   );
   await prisma.$executeRawUnsafe(`
+    UPDATE "AppSettings"
+    SET
+      "googleSheetsClientEmail" = NULL,
+      "googleSheetsPrivateKey" = NULL,
+      "googleSheetsSheetId" = NULL,
+      "googleSheetsSheetGid" = NULL
+    WHERE "id" = 'default';
+  `);
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "PostRentalInspection" (
       "id" TEXT NOT NULL,
       "inspectionSubmissionId" TEXT NOT NULL,
